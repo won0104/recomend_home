@@ -11,6 +11,7 @@ import NoticeFormView from '../views/NoticeFormView.vue'
 import HouseListView from '../views/HouseListView.vue'
 import HouseDetailView from '../views/HouseDetailView.vue'
 import HouseFormView from '../views/HouseFormView.vue'
+import NeighborhoodRecommendView from '../views/NeighborhoodRecommendView.vue'
 import MyPageView from '../views/MyPageView.vue'
 import AdminUsersView from '../views/AdminUsersView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
@@ -18,7 +19,8 @@ import NotFoundView from '../views/NotFoundView.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: HomeView },
+    { path: '/', name: 'home', component: NeighborhoodRecommendView },
+    { path: '/home', name: 'dashboard-home', component: HomeView },
     { path: '/login', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
     { path: '/boards', name: 'boards', component: BoardListView },
@@ -32,6 +34,8 @@ const router = createRouter({
     { path: '/houses', name: 'houses', component: HouseListView },
     { path: '/houses/:aptSeq', name: 'house-detail', component: HouseDetailView },
     { path: '/houses/:aptSeq/edit', name: 'house-edit', component: HouseFormView },
+    { path: '/neighborhood-recommend', name: 'neighborhood-recommend', component: NeighborhoodRecommendView },
+    { path: '/places', redirect: '/neighborhood-recommend' },
     { path: '/mypage', name: 'mypage', component: MyPageView },
     { path: '/admin/users', name: 'admin-users', component: AdminUsersView },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView }
