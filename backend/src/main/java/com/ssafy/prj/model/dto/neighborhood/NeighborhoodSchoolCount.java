@@ -1,4 +1,4 @@
-package com.ssafy.prj.model.service.neighborhood.dto;
+package com.ssafy.prj.model.dto.neighborhood;
 
 import lombok.Data;
 

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper
   PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.ssafy.prj.model.mapper.SchoolMapper">
+<mapper namespace="com.ssafy.prj.model.mapper.neighborhood.SchoolMapper">
 
     <!-- 법정동코드별 학교 수 조회 -->
     <select id="countByDongCode" parameterType="String" resultType="int">
@@ -14,7 +14,7 @@
     </select>
 
     <select id="countByDongCodes"
-            resultType="com.ssafy.prj.model.service.neighborhood.dto.NeighborhoodSchoolCount">
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodSchoolCount">
         SELECT
             d.dong_code AS dongCode,
             d.sido_name AS sidoName,

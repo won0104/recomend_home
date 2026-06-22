@@ -1,50 +1,85 @@
 -- =====================================================
--- schools 테이블 생성 및 데이터 적재 스크립트
--- 전국 초중등학교 위치 표준 데이터
+-- schools 테이블 및 테스트용 학교 데이터
+-- 실행 전: dongcodes 테이블에 법정동 코드가 적재되어 있어야 한다.
 -- =====================================================
 
--- 1. 기존 테이블 삭제 (필요시)
-DROP TABLE IF EXISTS `ssafy_home`.`schools` ;
+USE `ssafy_home`;
 
--- 2. schools 테이블 생성
-CREATE TABLE IF NOT EXISTS `ssafy_home`.`schools` (
+DROP TABLE IF EXISTS `schools`;
+
+CREATE TABLE `schools` (
   `school_id` VARCHAR(20) NOT NULL COMMENT '학교 고유 ID',
   `school_name` VARCHAR(100) NOT NULL COMMENT '학교명',
-  `sido` VARCHAR(30) NOT NULL COMMENT '시도명',
-  `sigungu` VARCHAR(30) NOT NULL COMMENT '시군구명',
-  `lawd_cd` BIGINT NOT NULL COMMENT '법정동코드',
-  `dong_name` VARCHAR(50) NULL COMMENT '법정동명',
+  `dong_code` VARCHAR(10) NOT NULL COMMENT '법정동코드',
   `school_type` VARCHAR(20) NOT NULL COMMENT '학교급구분 (초등학교, 중학교, 고등학교)',
   `establishment` VARCHAR(20) NOT NULL COMMENT '설립유형 (공립, 사립, 국립)',
   `facility_type` VARCHAR(20) NOT NULL COMMENT '시설구분 (본교, 분교)',
   `operation_status` VARCHAR(20) NOT NULL COMMENT '운영상태 (운영, 폐교, 휴교)',
   `latitude` DOUBLE NOT NULL COMMENT '위도',
   `longitude` DOUBLE NOT NULL COMMENT '경도',
-  `created_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
+  `created_date` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
   PRIMARY KEY (`school_id`),
-  KEY `idx_lawd_cd` (`lawd_cd`),
-  KEY `idx_sido_sigungu` (`sido`, `sigungu`),
-  KEY `idx_school_type` (`school_type`)
-)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = utf8mb4
-COLLATE = utf8mb4_0900_ai_ci
-COMMENT = '전국 초중등학교 위치 데이터';
+  KEY `idx_schools_dong_code` (`dong_code`),
+  KEY `idx_schools_school_type` (`school_type`),
+  CONSTRAINT `fk_schools_dong_code`
+    FOREIGN KEY (`dong_code`) REFERENCES `dongcodes` (`dong_code`)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = '학교 위치 데이터';
 
--- 3. 인덱스 추가 (조회 성능 최적화)
-CREATE INDEX idx_schools_lawd_cd ON `ssafy_home`.`schools`(`lawd_cd`);
-CREATE INDEX idx_schools_sido_sigungu ON `ssafy_home`.`schools`(`sido`, `sigungu`);
+-- 테스트용 샘플 데이터 20건: 각 dong_code는 dongcodes에 존재하는 법정동 코드다.
+INSERT INTO `schools` (
+  `school_id`, `school_name`, `dong_code`, `school_type`, `establishment`,
+  `facility_type`, `operation_status`, `latitude`, `longitude`
+) VALUES
+  ('TEST-SCH-001', '청운초등학교', '1111010100', '초등학교', '공립', '본교', '운영', 37.5871, 126.9694),
+  ('TEST-SCH-002', '부암중학교', '1111018400', '중학교', '공립', '본교', '운영', 37.5920, 126.9645),
+  ('TEST-SCH-003', '명동고등학교', '1114012600', '고등학교', '사립', '본교', '운영', 37.5637, 126.9855),
+  ('TEST-SCH-004', '신당초등학교', '1114016200', '초등학교', '공립', '본교', '운영', 37.5654, 127.0148),
+  ('TEST-SCH-005', '후암초등학교', '1117010100', '초등학교', '공립', '본교', '운영', 37.5497, 126.9789),
+  ('TEST-SCH-006', '이촌중학교', '1117012900', '중학교', '공립', '본교', '운영', 37.5208, 126.9702),
+  ('TEST-SCH-007', '행당초등학교', '1120010700', '초등학교', '공립', '본교', '운영', 37.5594, 127.0377),
+  ('TEST-SCH-008', '성수고등학교', '1120011400', '고등학교', '공립', '본교', '운영', 37.5443, 127.0558),
+  ('TEST-SCH-009', '구의초등학교', '1121510300', '초등학교', '공립', '본교', '운영', 37.5389, 127.0848),
+  ('TEST-SCH-010', '자양중학교', '1121510500', '중학교', '공립', '본교', '운영', 37.5337, 127.0748),
+  ('TEST-SCH-011', '답십리초등학교', '1123010500', '초등학교', '공립', '본교', '운영', 37.5689, 127.0557),
+  ('TEST-SCH-012', '장안고등학교', '1123010600', '고등학교', '사립', '본교', '운영', 37.5721, 127.0719),
+  ('TEST-SCH-013', '면목초등학교', '1126010100', '초등학교', '공립', '본교', '운영', 37.5858, 127.0865),
+  ('TEST-SCH-014', '묵동중학교', '1126010400', '중학교', '공립', '본교', '운영', 37.6103, 127.0787),
+  ('TEST-SCH-015', '길음초등학교', '1129013400', '초등학교', '공립', '본교', '운영', 37.6111, 127.0267),
+  ('TEST-SCH-016', '장위고등학교', '1129013800', '고등학교', '공립', '본교', '운영', 37.6143, 127.0531),
+  ('TEST-SCH-017', '미아초등학교', '1130510100', '초등학교', '공립', '본교', '운영', 37.6261, 127.0257),
+  ('TEST-SCH-018', '수유중학교', '1130510300', '중학교', '공립', '본교', '운영', 37.6385, 127.0251),
+  ('TEST-SCH-019', '창동초등학교', '1132010700', '초등학교', '공립', '본교', '운영', 37.6517, 127.0481),
+  ('TEST-SCH-020', '공릉고등학교', '1135010300', '고등학교', '공립', '본교', '운영', 37.6255, 127.0735),
 
--- 4. 데이터 적재 (CSV 파일에서)
--- 실행 방법:
--- LOAD DATA LOCAL INFILE '/경로/schools.csv'
--- INTO TABLE ssafy_home.schools
--- FIELDS TERMINATED BY ','
--- IGNORE 1 ROWS
--- (school_id, school_name, sido, sigungu, lawd_cd, dong_name, school_type, establishment, 
---  facility_type, operation_status, latitude, longitude);
+  -- 청운동: 기존 1건 + 아래 5건 = 총 6건
+  ('TEST-SCH-021', '청운중학교', '1111010100', '중학교', '공립', '본교', '운영', 37.5878, 126.9701),
+  ('TEST-SCH-022', '청운고등학교', '1111010100', '고등학교', '사립', '본교', '운영', 37.5864, 126.9687),
+  ('TEST-SCH-023', '청운새봄초등학교', '1111010100', '초등학교', '공립', '본교', '운영', 37.5883, 126.9690),
+  ('TEST-SCH-024', '청운한빛중학교', '1111010100', '중학교', '공립', '본교', '운영', 37.5869, 126.9710),
+  ('TEST-SCH-025', '청운미래고등학교', '1111010100', '고등학교', '공립', '본교', '운영', 37.5874, 126.9679),
 
--- 또는 테스트용 샘플 데이터 (선택사항)
--- INSERT INTO `ssafy_home`.`schools` VALUES
--- ('B000002843', '대구옥산초등학교', '대구광역시', '북구', 2723000000, '', '초등학교', '공립', '본교', '운영', 35.8808955, 128.5978756),
--- ('B000008555', '부곡여자중학교', '부산광역시', '금정구', 2641000000, '', '중학교', '공립', '본교', '운영', 35.22332989, 129.0953419);
+  -- 구의동: 기존 1건 + 아래 2건 = 총 3건
+  ('TEST-SCH-026', '구의중학교', '1121510300', '중학교', '공립', '본교', '운영', 37.5396, 127.0856),
+  ('TEST-SCH-027', '구의고등학교', '1121510300', '고등학교', '공립', '본교', '운영', 37.5382, 127.0839),
+
+  -- 공릉동: 기존 1건 + 아래 3건 = 총 4건
+  ('TEST-SCH-028', '공릉초등학교', '1135010300', '초등학교', '공립', '본교', '운영', 37.6262, 127.0742),
+  ('TEST-SCH-029', '공릉중학교', '1135010300', '중학교', '공립', '본교', '운영', 37.6248, 127.0726),
+  ('TEST-SCH-030', '공릉새별초등학교', '1135010300', '초등학교', '공립', '본교', '운영', 37.6259, 127.0751);
+
+-- 지역명은 schools에 중복 저장하지 않고 dongcodes에서 조회한다.
+SELECT
+  s.school_id,
+  s.school_name,
+  d.sido_name,
+  d.gugun_name,
+  d.dong_name,
+  s.school_type
+FROM `schools` s
+JOIN `dongcodes` d ON d.dong_code = s.dong_code
+ORDER BY s.school_id;
