@@ -4,32 +4,6 @@
   "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ssafy.prj.model.mapper.neighborhood.NeighborhoodRecommendMapper">
 
-    <resultMap id="saleCandidateMap" type="com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendResponse$NeighborhoodSaleCandidate">
-        <id column="id" property="id" />
-        <result column="apt_seq" property="aptSeq" />
-        <result column="apt_name" property="aptName" />
-        <result column="lawd_code" property="lawdCode" />
-        <result column="legal_dong_code" property="legalDongCode" />
-        <result column="legal_dong_name" property="legalDongName" />
-        <result column="address" property="address" />
-        <result column="amount" property="amount" />
-        <result column="area" property="area" />
-        <result column="floor" property="floor" />
-        <result column="built_year" property="builtYear" />
-        <result column="deal_date" property="dealDate" />
-        <result column="latitude" property="latitude" />
-        <result column="longitude" property="longitude" />
-        <result column="distance_km" property="distanceKm" />
-    </resultMap>
-
-    <resultMap id="legalDongCandidateMap" type="com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendResponse$LegalDongCandidate">
-        <id column="legal_dong_code" property="legalDongCode" />
-        <result column="legal_dong_name" property="legalDongName" />
-        <result column="deal_count" property="dealCount" />
-        <result column="min_amount" property="minAmount" />
-        <result column="min_distance_km" property="minDistanceKm" />
-    </resultMap>
-
     <sql id="distanceExpression">
         (6371 * ACOS(LEAST(1, GREATEST(-1,
             COS(RADIANS(#{originLat})) * COS(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8)))) *
@@ -38,65 +12,28 @@
         ))))
     </sql>
 
-    <sql id="candidateBase">
+    <sql id="legalDongCodeBase">
         SELECT
-            CAST(hd.no AS CHAR) AS id,
-            hi.apt_seq,
-            hi.apt_nm AS apt_name,
-            hi.sgg_cd AS lawd_code,
             CONCAT(hi.sgg_cd, hi.umd_cd) AS legal_dong_code,
-            hi.umd_nm AS legal_dong_name,
-            TRIM(REGEXP_REPLACE(CONCAT(COALESCE(dc.sido_name, ''), ' ', COALESCE(dc.gugun_name, ''), ' ', COALESCE(hi.umd_nm, ''), ' ', COALESCE(hi.jibun, '')), '[[:space:]]+', ' ')) AS address,
             CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) AS amount,
-            hd.exclu_use_ar AS area,
-            CAST(REPLACE(COALESCE(hd.floor, '0'), ',', '') AS SIGNED) AS floor,
-            hi.build_year AS built_year,
-            CASE
-                WHEN hd.deal_year &gt; 0 AND hd.deal_month &gt; 0 AND hd.deal_day &gt; 0
-                    THEN DATE_FORMAT(STR_TO_DATE(CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'), LPAD(hd.deal_day, 2, '0')), '%Y%m%d'), '%Y-%m-%d')
-                ELSE ''
-            END AS deal_date,
-            CAST(hi.latitude AS DECIMAL(12, 8)) AS latitude,
-            CAST(hi.longitude AS DECIMAL(12, 8)) AS longitude,
             <include refid="distanceExpression" /> AS distance_km
         FROM housedeals hd
         JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
-        LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
         WHERE hi.latitude IS NOT NULL
           AND hi.longitude IS NOT NULL
           AND hi.latitude != ''
           AND hi.longitude != ''
     </sql>
 
-    <select id="findSaleCandidates" resultMap="saleCandidateMap">
-        SELECT *
+    <select id="findLegalDongCodes" resultType="string">
+        SELECT DISTINCT c.legal_dong_code
         FROM (
-            <include refid="candidateBase" />
+            <include refid="legalDongCodeBase" />
         ) c
         WHERE c.distance_km &lt;= #{radiusKm}
         <if test="maxPrice != null">
             AND c.amount &lt;= #{maxPrice}
         </if>
-        ORDER BY c.distance_km ASC, c.amount ASC
-        LIMIT #{limit}
-    </select>
-
-    <select id="findLegalDongCandidates" resultMap="legalDongCandidateMap">
-        SELECT
-            c.legal_dong_code,
-            c.legal_dong_name,
-            COUNT(*) AS deal_count,
-            MIN(c.amount) AS min_amount,
-            ROUND(MIN(c.distance_km), 2) AS min_distance_km
-        FROM (
-            <include refid="candidateBase" />
-        ) c
-        WHERE c.distance_km &lt;= #{radiusKm}
-        <if test="maxPrice != null">
-            AND c.amount &lt;= #{maxPrice}
-        </if>
-        GROUP BY c.legal_dong_code, c.legal_dong_name
-        ORDER BY deal_count DESC, min_distance_km ASC
-        LIMIT 100
+        ORDER BY c.legal_dong_code
     </select>
 </mapper>

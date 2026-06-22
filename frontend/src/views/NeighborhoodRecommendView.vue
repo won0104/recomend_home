@@ -12,13 +12,9 @@ const screen = ref('search')
 
 const commuteRadius = ref(30)
 const budgetAmount = ref(3)
-const dealType = ref('all')
-const housingType = ref('apartment')
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
-const recommendError = ref('')
-const recommendResult = ref(null)
 
 const lifestyleOptions = [
   { id: 'cafe', icon: '☕', title: '카페·외식' },
@@ -38,22 +34,11 @@ const selectedAddress = computed(() => selectedPlace.value?.road_address_name ||
 const maxPrice = computed(() => Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000))
 
 const recommendationCondition = computed(() => ({
-  origin: {
-    placeName: selectedPlace.value?.place_name || '',
-    address: selectedPlace.value?.address_name || '',
-    roadAddress: selectedPlace.value?.road_address_name || '',
-    latitude: Number(selectedPlace.value?.y),
-    longitude: Number(selectedPlace.value?.x),
-    kakaoPlaceId: selectedPlace.value?.id || ''
-  },
+  latitude: Number(selectedPlace.value?.y),
+  longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
   maxPrice: maxPrice.value,
-  dealType: dealType.value,
-  housingType: housingType.value,
-  lifestylePriorities: selectedLifestyleIds.value.map((category, index) => ({
-    rank: index + 1,
-    category
-  })),
+  priorities: selectedLifestyleIds.value.map((category) => category.toUpperCase()),
   lifestyleMood: lifestyleMood.value
 }))
 
@@ -88,15 +73,12 @@ function backToBudgetStep() {
 
 async function submitRecommendation() {
   recommendLoading.value = true
-  recommendError.value = ''
-  recommendResult.value = null
 
   try {
     // 백엔드는 반경/예산으로 매매 후보를 걸러내고, 다음 추천 로직에 필요한 법정동 후보를 함께 내려줍니다.
-    const response = await recommendNeighborhood(recommendationCondition.value)
-    recommendResult.value = response.data
+    await recommendNeighborhood(recommendationCondition.value)
   } catch (error) {
-    recommendError.value = error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.'
+    console.error(error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.')
   } finally {
     recommendLoading.value = false
   }
@@ -144,8 +126,6 @@ async function submitRecommendation() {
         <BudgetStep
           v-else-if="screen === 'budget'"
           v-model:budget-amount="budgetAmount"
-          v-model:deal-type="dealType"
-          v-model:housing-type="housingType"
           @prev="backToRadiusStep"
           @next="openLifestyleStep"
         />
@@ -159,39 +139,6 @@ async function submitRecommendation() {
           @prev="backToBudgetStep"
           @submit="submitRecommendation"
         />
-
-        <div v-if="recommendError" class="recommend-result-card is-error">
-          {{ recommendError }}
-        </div>
-
-        <div v-if="recommendResult" class="recommend-result-card">
-          <div class="recommend-result-head">
-            <strong>필터링 결과</strong>
-            <span class="badge text-bg-secondary">매매 {{ recommendResult.totalCount }}건</span>
-          </div>
-
-          <div class="recommend-result-grid">
-            <section>
-              <h3>추천 후보 법정동</h3>
-              <ol class="recommend-dong-list">
-                <li v-for="dong in recommendResult.legalDongs" :key="dong.legalDongCode">
-                  <strong>{{ dong.legalDongName }}</strong>
-                  <span>{{ dong.legalDongCode }} · {{ dong.dealCount }}건 · 최저 {{ dong.minAmount }}만원</span>
-                </li>
-              </ol>
-            </section>
-
-            <section>
-              <h3>생활성향 우선순위</h3>
-              <ol class="recommend-dong-list">
-                <li v-for="item in recommendResult.lifestylePriorities" :key="`${item.rank}-${item.category}`">
-                  <strong>{{ item.rank }}순위</strong>
-                  <span>{{ item.category }}</span>
-                </li>
-              </ol>
-            </section>
-          </div>
-        </div>
       </section>
     </template>
   </main>
