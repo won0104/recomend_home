@@ -1,7 +1,7 @@
 package com.ssafy.prj.model.service.neighborhood.score.school;
 
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
@@ -10,6 +10,7 @@ import com.ssafy.prj.model.dto.neighborhood.NeighborhoodSchoolCount;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
 import com.ssafy.prj.model.service.neighborhood.SurveyCategory;
 import com.ssafy.prj.model.service.neighborhood.score.CategoryScoreCalculator;
+import com.ssafy.prj.model.service.neighborhood.score.RelativeScorePolicy;
 
 import lombok.RequiredArgsConstructor;
 
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class SchoolScoreCalculator implements CategoryScoreCalculator {
 
     private final SchoolMapper schoolMapper;
+    private final RelativeScorePolicy relativeScorePolicy;
 
     @Override
     public SurveyCategory category() {
@@ -35,29 +37,6 @@ public class SchoolScoreCalculator implements CategoryScoreCalculator {
             countsByDongCode.put(schoolCount.getDongCode(), schoolCount.getSchoolCount());
         }
 
-        return calculateRelativeScores(countsByDongCode);
-    }
-
-    private Map<String, Double> calculateRelativeScores(Map<String, Integer> countsByDongCode) {
-        Map<String, Double> scores = new LinkedHashMap<>();
-        if (countsByDongCode.isEmpty()) {
-            return scores;
-        }
-
-        int candidateCount = countsByDongCode.size();
-        double scoreStep = 100.0 / candidateCount;
-        for (Map.Entry<String, Integer> entry : countsByDongCode.entrySet()) {
-            int count = entry.getValue() == null ? 0 : entry.getValue();
-            if (count <= 0) {
-                scores.put(entry.getKey(), 0.0);
-                continue;
-            }
-
-            long betterCandidateCount = countsByDongCode.values().stream()
-                .filter(candidateCountValue -> candidateCountValue != null && candidateCountValue > count)
-                .count();
-            scores.put(entry.getKey(), 100.0 - betterCandidateCount * scoreStep);
-        }
-        return scores;
+        return relativeScorePolicy.calculateScores(countsByDongCode);
     }
 }

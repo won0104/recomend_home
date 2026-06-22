@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodSchoolCount;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
+import com.ssafy.prj.model.service.neighborhood.score.RelativeScorePolicy;
 
 @ExtendWith(MockitoExtension.class)
 class SchoolScoreCalculatorTest {
@@ -25,7 +26,7 @@ class SchoolScoreCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        schoolScoreCalculator = new SchoolScoreCalculator(schoolMapper);
+        schoolScoreCalculator = new SchoolScoreCalculator(schoolMapper, new RelativeScorePolicy());
     }
 
     @Test
