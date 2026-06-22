@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.batch.dao.EstateMarketBatchDao">
+
+    <resultMap id="estateMarketItemMap" type="com.ssafy.prj.batch.domain.EstateMarketItem">
+        <result column="report_id" property="reportId" />
+        <result column="source_type" property="sourceType" />
+        <result column="lawd_cd" property="lawdCd" />
+        <result column="deal_ymd" property="dealYmd" />
+        <result column="apt_name" property="aptName" />
+        <result column="dong" property="dong" />
+        <result column="jibun" property="jibun" />
+        <result column="deal_amount" property="dealAmount" />
+        <result column="area" property="area" />
+        <result column="floor" property="floor" />
+        <result column="build_year" property="buildYear" />
+        <result column="deal_date" property="dealDate" />
+        <result column="raw_address" property="rawAddress" />
+    </resultMap>
+
+    <update id="createReportTable">
+        CREATE TABLE IF NOT EXISTS batch_estate_market_reports (
+            report_id VARCHAR(40) PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            lawd_cd VARCHAR(10) NOT NULL,
+            deal_ymd VARCHAR(200) NOT NULL,
+            collected_at VARCHAR(30) NOT NULL,
+            item_count INT NOT NULL DEFAULT 0,
+            avg_deal_amount INT NOT NULL DEFAULT 0,
+            max_deal_amount INT NOT NULL DEFAULT 0,
+            min_deal_amount INT NOT NULL DEFAULT 0,
+            ai_summary TEXT,
+            ai_status VARCHAR(30),
+            pdf_path VARCHAR(1000),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    </update>
+
+    <update id="widenReportDealYmdColumn">
+        ALTER TABLE batch_estate_market_reports
+        MODIFY deal_ymd VARCHAR(200) NOT NULL
+    </update>
+
+    <update id="createItemTable">
+        CREATE TABLE IF NOT EXISTS batch_estate_market_items (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            report_id VARCHAR(40) NOT NULL,
+            source_type VARCHAR(20) NOT NULL,
+            lawd_cd VARCHAR(10) NOT NULL,
+            deal_ymd VARCHAR(6) NOT NULL,
+            apt_name VARCHAR(200) NOT NULL,
+            dong VARCHAR(100),
+            jibun VARCHAR(100),
+            deal_amount INT NOT NULL DEFAULT 0,
+            area DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            floor INT NOT NULL DEFAULT 0,
+            build_year INT NOT NULL DEFAULT 0,
+            deal_date VARCHAR(10),
+            raw_address VARCHAR(500),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_batch_estate_report_id (report_id),
+            INDEX idx_batch_estate_lawd_deal (lawd_cd, deal_ymd)
+        )
+    </update>
+
+    <insert id="insertReport" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
+        INSERT INTO batch_estate_market_reports
+            (report_id, title, lawd_cd, deal_ymd, collected_at, item_count,
+             avg_deal_amount, max_deal_amount, min_deal_amount, ai_status)
+        VALUES
+            (#{reportId}, #{title}, #{lawdCd}, #{dealYmd}, #{collectedAt}, #{itemCount},
+             #{avgDealAmount}, #{maxDealAmount}, #{minDealAmount}, #{aiStatus})
+    </insert>
+
+    <insert id="insertItems">
+        INSERT INTO batch_estate_market_items
+            (report_id, source_type, lawd_cd, deal_ymd, apt_name, dong, jibun,
+             deal_amount, area, floor, build_year, deal_date, raw_address)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{item.reportId}, #{item.sourceType}, #{item.lawdCd}, #{item.dealYmd},
+             #{item.aptName}, #{item.dong}, #{item.jibun}, #{item.dealAmount},
+             #{item.area}, #{item.floor}, #{item.buildYear}, #{item.dealDate},
+             #{item.rawAddress})
+        </foreach>
+    </insert>
+
+    <insert id="upsertHouseInfos">
+        INSERT INTO houseinfos
+            (apt_seq, sgg_cd, umd_cd, umd_nm, jibun, road_nm_sgg_cd, road_nm,
+             road_nm_bonbun, road_nm_bubun, apt_nm, build_year, latitude, longitude)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (
+             CONCAT('BT', #{item.lawdCd}, '-', SUBSTRING(MD5(CONCAT_WS('|',
+                #{item.lawdCd}, #{item.dong}, #{item.jibun}, #{item.aptName})), 1, 10)),
+             #{item.lawdCd},
+             COALESCE((
+                SELECT SUBSTRING(dc.dong_code, 6, 5)
+                FROM dongcodes dc
+                WHERE dc.dong_code LIKE CONCAT(#{item.lawdCd}, '%')
+                  AND dc.dong_name = #{item.dong}
+                LIMIT 1
+             ), '00000'),
+             #{item.dong},
+             #{item.jibun},
+             #{item.lawdCd},
+             '',
+             '',
+             '',
+             #{item.aptName},
+             #{item.buildYear},
+             NULL,
+             NULL
+            )
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            apt_nm = VALUES(apt_nm),
+            build_year = VALUES(build_year),
+            umd_nm = VALUES(umd_nm),
+            jibun = VALUES(jibun),
+            umd_cd = VALUES(umd_cd)
+    </insert>
+
+    <insert id="insertNewHouseDeals">
+        INSERT INTO housedeals
+            (apt_seq, apt_dong, floor, deal_year, deal_month, deal_day, exclu_use_ar, deal_amount)
+        SELECT v.apt_seq, v.apt_dong, v.floor, v.deal_year, v.deal_month, v.deal_day,
+               v.exclu_use_ar, v.deal_amount
+        FROM (
+        <foreach collection="items" item="item" separator=" UNION ALL ">
+            SELECT
+                CONCAT('BT', #{item.lawdCd}, '-', SUBSTRING(MD5(CONCAT_WS('|',
+                    #{item.lawdCd}, #{item.dong}, #{item.jibun}, #{item.aptName})), 1, 10)) AS apt_seq,
+                '' AS apt_dong,
+                CAST(#{item.floor} AS CHAR) AS floor,
+                CAST(SUBSTRING(#{item.dealDate}, 1, 4) AS UNSIGNED) AS deal_year,
+                CAST(SUBSTRING(#{item.dealDate}, 6, 2) AS UNSIGNED) AS deal_month,
+                CAST(SUBSTRING(#{item.dealDate}, 9, 2) AS UNSIGNED) AS deal_day,
+                #{item.area} AS exclu_use_ar,
+                CAST(#{item.dealAmount} AS CHAR) AS deal_amount
+        </foreach>
+        ) v
+        WHERE v.deal_year IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM housedeals hd
+              WHERE hd.apt_seq = v.apt_seq
+                AND hd.deal_year = v.deal_year
+                AND hd.deal_month = v.deal_month
+                AND hd.deal_day = v.deal_day
+                AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) = CAST(v.deal_amount AS UNSIGNED)
+                AND COALESCE(hd.exclu_use_ar, 0) = COALESCE(v.exclu_use_ar, 0)
+                AND COALESCE(hd.floor, '') = COALESCE(v.floor, '')
+          )
+    </insert>
+
+    <update id="updateAiResult" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
+        UPDATE batch_estate_market_reports
+        SET ai_summary = #{aiSummary},
+            ai_status = #{aiStatus}
+        WHERE report_id = #{reportId}
+    </update>
+
+    <update id="updatePdfPath" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
+        UPDATE batch_estate_market_reports
+        SET pdf_path = #{pdfPath}
+        WHERE report_id = #{reportId}
+    </update>
+
+    <select id="selectAllLawdCodes" resultType="string">
+        SELECT DISTINCT SUBSTRING(dong_code, 1, 5) AS lawd_cd
+        FROM dongcodes
+        WHERE dong_code IS NOT NULL
+          AND LENGTH(dong_code) &gt;= 5
+        ORDER BY lawd_cd
+    </select>
+
+    <select id="selectFallbackItems" resultMap="estateMarketItemMap">
+        SELECT
+            'LOCAL_DB' AS source_type,
+            COALESCE(hi.sgg_cd, #{lawdCd}) AS lawd_cd,
+            CASE
+                WHEN hd.deal_year > 0 AND hd.deal_month > 0
+                    THEN CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'))
+                ELSE #{dealYmd}
+            END AS deal_ymd,
+            COALESCE(hi.apt_nm, '') AS apt_name,
+            COALESCE(hi.umd_nm, '') AS dong,
+            COALESCE(hi.jibun, '') AS jibun,
+            CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) AS deal_amount,
+            COALESCE(hd.exclu_use_ar, 0) AS area,
+            CAST(REPLACE(COALESCE(hd.floor, '0'), ',', '') AS SIGNED) AS floor,
+            COALESCE(hi.build_year, 0) AS build_year,
+            CASE
+                WHEN hd.deal_year > 0 AND hd.deal_month > 0 AND hd.deal_day > 0
+                    THEN DATE_FORMAT(STR_TO_DATE(CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'), LPAD(hd.deal_day, 2, '0')), '%Y%m%d'), '%Y-%m-%d')
+                ELSE ''
+            END AS deal_date,
+            TRIM(REGEXP_REPLACE(CONCAT(COALESCE(dc.sido_name, ''), ' ', COALESCE(dc.gugun_name, ''), ' ', COALESCE(hi.umd_nm, ''), ' ', COALESCE(hi.jibun, '')), '[[:space:]]+', ' ')) AS raw_address
+        FROM housedeals hd
+        JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
+        LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <where>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND hi.sgg_cd = #{lawdCd}
+            </if>
+            <if test="dealYmd != null and dealYmd.trim() != ''">
+                AND hd.deal_year = CAST(SUBSTRING(#{dealYmd}, 1, 4) AS UNSIGNED)
+                AND hd.deal_month = CAST(SUBSTRING(#{dealYmd}, 5, 2) AS UNSIGNED)
+            </if>
+        </where>
+        ORDER BY hd.deal_year DESC, hd.deal_month DESC, hd.deal_day DESC, hd.no DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

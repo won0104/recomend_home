@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.HouseInfoMapper">
+
+    <resultMap id="houseInfoMap" type="HouseInfo">
+        <id column="apt_seq" property="aptSeq" />
+        <result column="sgg_cd" property="sggCd" />
+        <result column="umd_cd" property="umdCd" />
+        <result column="umd_nm" property="umdNm" />
+        <result column="jibun" property="jibun" />
+        <result column="road_nm_sgg_cd" property="roadNmSggCd" />
+        <result column="road_nm" property="roadNm" />
+        <result column="road_nm_bonbun" property="roadNmBonbun" />
+        <result column="road_nm_bubun" property="roadNmBubun" />
+        <result column="apt_nm" property="aptNm" />
+        <result column="build_year" property="buildYear" />
+        <result column="latitude" property="latitude" />
+        <result column="longitude" property="longitude" />
+        <result column="sido_name" property="sidoName" />
+        <result column="gugun_name" property="gugunName" />
+        <result column="deal_count" property="dealCount" />
+    </resultMap>
+
+    <resultMap id="recentDealMap" type="RealEstateTransaction">
+        <id column="id" property="id" />
+        <result column="apt_seq" property="aptSeq" />
+        <result column="housing_type" property="housingType" />
+        <result column="contract_type" property="contractType" />
+        <result column="name" property="name" />
+        <result column="dong" property="dong" />
+        <result column="emd" property="emd" />
+        <result column="lot" property="lot" />
+        <result column="region_code" property="regionCode" />
+        <result column="amount" property="amount" />
+        <result column="area" property="area" />
+        <result column="floor" property="floor" />
+        <result column="date" property="date" />
+        <result column="deal_ymd" property="dealYmd" />
+    </resultMap>
+
+    <sql id="houseInfoColumns">
+        hi.apt_seq,
+        hi.sgg_cd,
+        hi.umd_cd,
+        hi.umd_nm,
+        hi.jibun,
+        hi.road_nm_sgg_cd,
+        hi.road_nm,
+        hi.road_nm_bonbun,
+        hi.road_nm_bubun,
+        hi.apt_nm,
+        hi.build_year,
+        hi.latitude,
+        hi.longitude,
+        dc.sido_name,
+        dc.gugun_name,
+        (SELECT COUNT(*) FROM housedeals hd WHERE hd.apt_seq = hi.apt_seq) AS deal_count
+    </sql>
+
+    <select id="search" resultMap="houseInfoMap">
+        SELECT
+        <include refid="houseInfoColumns" />
+        FROM houseinfos hi
+        LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <where>
+            <if test="sigunguCode != null and sigunguCode.trim() != ''">
+                AND hi.sgg_cd = #{sigunguCode}
+            </if>
+            <if test="dongName != null and dongName.trim() != ''">
+                AND hi.umd_nm LIKE CONCAT('%', #{dongName}, '%')
+            </if>
+            <if test="keyword != null and keyword.trim() != ''">
+                AND hi.apt_nm LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+        </where>
+        ORDER BY hi.apt_nm ASC
+        LIMIT 200
+    </select>
+
+    <select id="findByAptSeq" parameterType="string" resultMap="houseInfoMap">
+        SELECT
+        <include refid="houseInfoColumns" />
+        FROM houseinfos hi
+        LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        WHERE hi.apt_seq = #{aptSeq}
+    </select>
+
+    <update id="update" parameterType="HouseInfo">
+        UPDATE houseinfos
+        SET apt_nm = #{aptNm},
+            build_year = #{buildYear},
+            latitude = #{latitude},
+            longitude = #{longitude}
+        WHERE apt_seq = #{aptSeq}
+    </update>
+
+    <select id="findRecentDealsByAptSeq" resultMap="recentDealMap">
+        SELECT
+            CAST(hd.no AS CHAR) AS id,
+            hd.apt_seq,
+            'apt' AS housing_type,
+            'deal' AS contract_type,
+            COALESCE(hi.apt_nm, '') AS name,
+            COALESCE(hi.umd_nm, '') AS dong,
+            COALESCE(hi.umd_nm, '') AS emd,
+            COALESCE(hi.jibun, '') AS lot,
+            COALESCE(hi.sgg_cd, '') AS region_code,
+            CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) AS amount,
+            hd.exclu_use_ar AS area,
+            CAST(REPLACE(COALESCE(hd.floor, '0'), ',', '') AS SIGNED) AS floor,
+            CASE
+                WHEN hd.deal_year &gt; 0 AND hd.deal_month &gt; 0 AND hd.deal_day &gt; 0
+                    THEN DATE_FORMAT(STR_TO_DATE(CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'), LPAD(hd.deal_day, 2, '0')), '%Y%m%d'), '%Y-%m-%d')
+                ELSE ''
+            END AS date,
+            CASE
+                WHEN hd.deal_year &gt; 0 AND hd.deal_month &gt; 0
+                    THEN CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'))
+                ELSE ''
+            END AS deal_ymd
+        FROM housedeals hd
+        JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
+        WHERE hd.apt_seq = #{aptSeq}
+        ORDER BY hd.deal_year DESC, hd.deal_month DESC, hd.deal_day DESC, hd.no DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

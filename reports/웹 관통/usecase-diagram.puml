@@ -1,0 +1,43 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "비회원" as Guest
+actor "회원" as User
+actor "국토교통부/VWorld API" as ExternalApi
+
+rectangle "부동산 실거래 정보 조회 서비스" {
+  usecase "주택 실거래가 조회" as UC_SearchDeals
+  usecase "조건별 검색" as UC_SearchFilter
+  usecase "회원가입" as UC_Register
+  usecase "로그인" as UC_Login
+  usecase "로그아웃" as UC_Logout
+  usecase "회원정보 조회" as UC_ViewProfile
+  usecase "회원정보 수정" as UC_UpdateProfile
+  usecase "회원 탈퇴" as UC_DeleteProfile
+  usecase "관심지역 추가" as UC_AddFavorite
+  usecase "관심지역 조회" as UC_ViewFavorite
+  usecase "관심지역 삭제" as UC_DeleteFavorite
+  usecase "실거래가/지역 정보 수집" as UC_FetchExternal
+}
+
+Guest --> UC_SearchDeals
+Guest --> UC_SearchFilter
+Guest --> UC_Register
+Guest --> UC_Login
+
+User --> UC_SearchDeals
+User --> UC_SearchFilter
+User --> UC_Logout
+User --> UC_ViewProfile
+User --> UC_UpdateProfile
+User --> UC_DeleteProfile
+User --> UC_AddFavorite
+User --> UC_ViewFavorite
+User --> UC_DeleteFavorite
+
+UC_SearchDeals .> UC_FetchExternal : <<include>>
+UC_SearchFilter .> UC_SearchDeals : <<extend>>
+ExternalApi --> UC_FetchExternal
+
+@enduml

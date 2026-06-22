@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.DongCodeMapper">
+
+    <select id="findSidoList" resultType="map">
+        SELECT
+            LEFT(dong_code, 2) AS code,
+            sido_name AS name
+        FROM dongcodes
+        WHERE sido_name IS NOT NULL
+          AND sido_name &lt;&gt; ''
+        GROUP BY LEFT(dong_code, 2), sido_name
+        ORDER BY name
+    </select>
+
+    <select id="findSigunguList" parameterType="string" resultType="map">
+        SELECT
+            LEFT(dong_code, 5) AS code,
+            gugun_name AS name
+        FROM dongcodes
+        WHERE LEFT(dong_code, 2) = #{sidoCode}
+          AND gugun_name IS NOT NULL
+          AND gugun_name &lt;&gt; ''
+        GROUP BY LEFT(dong_code, 5), gugun_name
+        ORDER BY name
+    </select>
+
+    <select id="findEmdList" parameterType="string" resultType="map">
+        SELECT
+            dong_code AS code,
+            dong_name AS name
+        FROM dongcodes
+        WHERE LEFT(dong_code, 5) = #{sigunguCode}
+          AND dong_name IS NOT NULL
+          AND dong_name &lt;&gt; ''
+        ORDER BY name
+    </select>
+</mapper>

@@ -1,0 +1,35 @@
+# python
+__pycache__/
+*.pyc
+
+# virtual environment
+.venv/
+
+
+# system
+.DS_Store
+
+
+**/bin/
+**/.settings/
+**/.metadata/
+**/.recommenders/
+**/.idea/
+**/Servers/
+**/target/
+**/build/
+**/dist/
+**/node_modules/
+**/.kotlin/
+**/.claude/
+
+requirements/*
+reference/*
+.project
+data/*
+
+ERD_all.mwb.bak
+
+# local secrets
+**/application-secret.properties
+**/application-local.properties

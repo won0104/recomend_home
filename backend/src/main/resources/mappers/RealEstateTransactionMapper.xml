@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.RealEstateTransactionMapper">
+
+    <resultMap id="transactionMap" type="RealEstateTransaction">
+        <id column="id" property="id" />
+        <result column="apt_seq" property="aptSeq" />
+        <result column="housing_type" property="housingType" />
+        <result column="contract_type" property="contractType" />
+        <result column="name" property="name" />
+        <result column="dong" property="dong" />
+        <result column="emd" property="emd" />
+        <result column="lot" property="lot" />
+        <result column="region_code" property="regionCode" />
+        <result column="sido" property="sido" />
+        <result column="sigungu" property="sigungu" />
+        <result column="amount" property="amount" />
+        <result column="deposit" property="deposit" />
+        <result column="monthly_rent" property="monthlyRent" />
+        <result column="area" property="area" />
+        <result column="floor" property="floor" />
+        <result column="built_year" property="builtYear" />
+        <result column="date" property="date" />
+        <result column="deal_ymd" property="dealYmd" />
+        <result column="address" property="address" />
+    </resultMap>
+
+    <select id="search" parameterType="SearchCondition" resultMap="transactionMap">
+        <bind name="dealYear" value="dealYmd != null and dealYmd.trim().length() &gt;= 4 ? dealYmd.trim().substring(0, 4) : null" />
+        <bind name="dealMonth" value="dealYmd != null and dealYmd.trim().length() &gt;= 6 ? dealYmd.trim().substring(4, 6) : null" />
+        SELECT
+            CAST(hd.no AS CHAR) AS id,
+            hd.apt_seq,
+            'apt' AS housing_type,
+            'deal' AS contract_type,
+            COALESCE(hi.apt_nm, '') AS name,
+            COALESCE(hi.umd_nm, '') AS dong,
+            COALESCE(hi.umd_nm, '') AS emd,
+            COALESCE(hi.jibun, '') AS lot,
+            COALESCE(hi.sgg_cd, '') AS region_code,
+            COALESCE(dc.sido_name, '') AS sido,
+            COALESCE(dc.gugun_name, '') AS sigungu,
+            CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) AS amount,
+            0 AS deposit,
+            0 AS monthly_rent,
+            hd.exclu_use_ar AS area,
+            CAST(REPLACE(COALESCE(hd.floor, '0'), ',', '') AS SIGNED) AS floor,
+            hi.build_year AS built_year,
+            CASE
+                WHEN hd.deal_year &gt; 0 AND hd.deal_month &gt; 0 AND hd.deal_day &gt; 0
+                    THEN DATE_FORMAT(STR_TO_DATE(CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'), LPAD(hd.deal_day, 2, '0')), '%Y%m%d'), '%Y-%m-%d')
+                ELSE ''
+            END AS date,
+            CASE
+                WHEN hd.deal_year &gt; 0 AND hd.deal_month &gt; 0
+                    THEN CONCAT(hd.deal_year, LPAD(hd.deal_month, 2, '0'))
+                ELSE ''
+            END AS deal_ymd,
+            TRIM(REGEXP_REPLACE(CONCAT(COALESCE(dc.sido_name, ''), ' ', COALESCE(dc.gugun_name, ''), ' ', COALESCE(hi.umd_nm, ''), ' ', COALESCE(hi.jibun, '')), '[[:space:]]+', ' ')) AS address
+        FROM housedeals hd
+        JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
+        LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <where>
+            <if test="dealYear != null">
+                AND hd.deal_year = CAST(#{dealYear} AS UNSIGNED)
+            </if>
+            <if test="dealMonth != null">
+                AND hd.deal_month = CAST(#{dealMonth} AS UNSIGNED)
+            </if>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND hi.sgg_cd = #{lawdCd}
+            </if>
+            <if test="dong != null and dong.trim() != ''">
+                AND hi.umd_nm LIKE CONCAT('%', #{dong}, '%')
+            </if>
+            <if test="keyword != null and keyword.trim() != ''">
+                AND (hi.apt_nm LIKE CONCAT('%', #{keyword}, '%')
+                     OR hi.umd_nm LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY hd.deal_year DESC, hd.deal_month DESC, hd.deal_day DESC, hd.no DESC
+        LIMIT 1000
+    </select>
+</mapper>

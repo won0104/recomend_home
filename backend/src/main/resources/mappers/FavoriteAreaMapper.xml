@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.FavoriteAreaMapper">
+
+    <resultMap id="favoriteAreaMap" type="FavoriteArea">
+        <id column="lawd_cd" property="key" />
+        <result column="user_id" property="userId" />
+        <result column="sido" property="sido" />
+        <result column="sigungu" property="sigungu" />
+        <result column="emd" property="emd" />
+        <result column="lawd_cd" property="lawdCd" />
+        <result column="created_at" property="createdAt" />
+    </resultMap>
+
+    <select id="findByUserId" parameterType="string" resultMap="favoriteAreaMap">
+        SELECT
+            user_id,
+            sido,
+            sigungu,
+            emd,
+            lawd_cd,
+            DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s') AS created_at
+        FROM favorite_areas
+        WHERE user_id = #{userId}
+        ORDER BY created_at ASC
+    </select>
+
+    <insert id="insert" parameterType="FavoriteArea">
+        INSERT IGNORE INTO favorite_areas (
+            user_id,
+            sido,
+            sigungu,
+            emd,
+            lawd_cd,
+            created_at
+        ) VALUES (
+            #{userId},
+            #{sido},
+            #{sigungu},
+            #{emd},
+            #{lawdCd},
+            NOW()
+        )
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM favorite_areas
+        WHERE user_id = #{userId}
+          AND lawd_cd = #{key}
+    </delete>
+
+    <delete id="deleteByUserId" parameterType="string">
+        DELETE FROM favorite_areas
+        WHERE user_id = #{userId}
+    </delete>
+</mapper>
