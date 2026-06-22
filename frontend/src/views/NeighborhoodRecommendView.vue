@@ -5,6 +5,7 @@ import LifestyleStep from '../components/neighborhood/LifestyleStep.vue'
 import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
+import { recommendNeighborhood } from '../api/neighborhoods'
 
 const selectedPlace = ref(null)
 const screen = ref('search')
@@ -15,6 +16,9 @@ const dealType = ref('all')
 const housingType = ref('apartment')
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
+const recommendLoading = ref(false)
+const recommendError = ref('')
+const recommendResult = ref(null)
 
 const lifestyleOptions = [
   { id: 'cafe', icon: '☕', title: '카페·외식' },
@@ -31,14 +35,25 @@ const currentStep = computed(() => {
   return 1
 })
 const selectedAddress = computed(() => selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || '')
+const maxPrice = computed(() => Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000))
 
 const recommendationCondition = computed(() => ({
-  origin: selectedPlace.value,
+  origin: {
+    placeName: selectedPlace.value?.place_name || '',
+    address: selectedPlace.value?.address_name || '',
+    roadAddress: selectedPlace.value?.road_address_name || '',
+    latitude: Number(selectedPlace.value?.y),
+    longitude: Number(selectedPlace.value?.x),
+    kakaoPlaceId: selectedPlace.value?.id || ''
+  },
   radiusKm: commuteRadius.value,
-  budgetAmount: budgetAmount.value,
+  maxPrice: maxPrice.value,
   dealType: dealType.value,
   housingType: housingType.value,
-  lifestyleIds: selectedLifestyleIds.value,
+  lifestylePriorities: selectedLifestyleIds.value.map((category, index) => ({
+    rank: index + 1,
+    category
+  })),
   lifestyleMood: lifestyleMood.value
 }))
 
@@ -71,9 +86,20 @@ function backToBudgetStep() {
   screen.value = 'budget'
 }
 
-function submitRecommendation() {
-  // 추천 API가 연결되면 recommendationCondition.value를 요청 payload로 사용하면 됩니다.
-  console.info('neighborhood recommendation condition', recommendationCondition.value)
+async function submitRecommendation() {
+  recommendLoading.value = true
+  recommendError.value = ''
+  recommendResult.value = null
+
+  try {
+    // 백엔드는 반경/예산으로 매매 후보를 걸러내고, 다음 추천 로직에 필요한 법정동 후보를 함께 내려줍니다.
+    const response = await recommendNeighborhood(recommendationCondition.value)
+    recommendResult.value = response.data
+  } catch (error) {
+    recommendError.value = error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.'
+  } finally {
+    recommendLoading.value = false
+  }
 }
 </script>
 
@@ -129,9 +155,43 @@ function submitRecommendation() {
           v-model:selected-lifestyle-ids="selectedLifestyleIds"
           v-model:lifestyle-mood="lifestyleMood"
           :lifestyle-options="lifestyleOptions"
+          :submitting="recommendLoading"
           @prev="backToBudgetStep"
           @submit="submitRecommendation"
         />
+
+        <div v-if="recommendError" class="recommend-result-card is-error">
+          {{ recommendError }}
+        </div>
+
+        <div v-if="recommendResult" class="recommend-result-card">
+          <div class="recommend-result-head">
+            <strong>필터링 결과</strong>
+            <span class="badge text-bg-secondary">매매 {{ recommendResult.totalCount }}건</span>
+          </div>
+
+          <div class="recommend-result-grid">
+            <section>
+              <h3>추천 후보 법정동</h3>
+              <ol class="recommend-dong-list">
+                <li v-for="dong in recommendResult.legalDongs" :key="dong.legalDongCode">
+                  <strong>{{ dong.legalDongName }}</strong>
+                  <span>{{ dong.legalDongCode }} · {{ dong.dealCount }}건 · 최저 {{ dong.minAmount }}만원</span>
+                </li>
+              </ol>
+            </section>
+
+            <section>
+              <h3>생활성향 우선순위</h3>
+              <ol class="recommend-dong-list">
+                <li v-for="item in recommendResult.lifestylePriorities" :key="`${item.rank}-${item.category}`">
+                  <strong>{{ item.rank }}순위</strong>
+                  <span>{{ item.category }}</span>
+                </li>
+              </ol>
+            </section>
+          </div>
+        </div>
       </section>
     </template>
   </main>
