@@ -1,6 +1,7 @@
 package com.ssafy.prj.batch.geocoding;
 
 import java.net.URI;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -14,10 +15,10 @@ import com.ssafy.prj.batch.dao.EstateMarketBatchDao;
 import com.ssafy.prj.batch.domain.HouseCoordinateTarget;
 
 /**
- * 매매 배치로 새로 들어온 아파트의 좌표를 카카오 로컬 API로 한 번만 보강한다.
+ * 거래 배치로 새로 들어온 아파트의 좌표를 카카오 로컬 API로 한 번만 보강한다.
  *
  * <p>동네 추천의 반경 계산과 매물 지도 마커는 {@code houseinfos.latitude/longitude}를 사용한다.
- * 국토부 매매 API는 좌표를 주지 않으므로, DB에 좌표가 없는 아파트만 주소 검색한다. 좌표를 저장한
+ * 국토부 매매·전월세 API는 좌표를 주지 않으므로, DB에 좌표가 없는 아파트만 주소 검색한다. 좌표를 저장한
  * 아파트는 다음 배치에서 조회 대상에서 제외되므로, 거래 건수가 늘어도 같은 주소를 반복 호출하지 않는다.</p>
  */
 @Component
@@ -54,16 +55,28 @@ public class HouseCoordinateEnrichmentService {
      * API 키가 설정되지 않았어도 매매 거래 적재 자체는 성공해야 하므로, 좌표 보강만 건너뛴다.
      */
     public void enrichForReport(String reportId) {
+        enrichTargets("EstateBatch", reportId,
+                estateMarketBatchDao.findMissingCoordinateTargetsByReportId(reportId),
+                estateMarketBatchDao::updateHouseCoordinates);
+    }
+
+    /**
+     * 매매와 전월세가 공통으로 쓰는 좌표 보강 루틴이다.
+     *
+     * <p>대상 조회와 좌표 저장 SQL은 각 배치 DAO에서 넘긴다. 그러면 두 배치가 동일한
+     * houseinfos 좌표를 공유하면서도, 어느 임시 적재 테이블의 대상인지는 서로 섞이지 않는다.</p>
+     */
+    public void enrichTargets(String batchName, String reportId, List<HouseCoordinateTarget> targets,
+            HouseCoordinateUpdater updater) {
         if (!enabled) {
-            System.out.println("[EstateBatch-Geocoding] 좌표 보강 기능이 비활성화되어 건너뜁니다.");
+            System.out.println("[" + batchName + "-Geocoding] 좌표 보강 기능이 비활성화되어 건너뜁니다.");
             return;
         }
         if (apiKey == null || apiKey.isBlank()) {
-            System.out.println("[EstateBatch-Geocoding] KAKAO_REST_API_KEY가 없어 좌표 보강을 건너뜁니다.");
+            System.out.println("[" + batchName + "-Geocoding] KAKAO_REST_API_KEY가 없어 좌표 보강을 건너뜁니다.");
             return;
         }
 
-        var targets = estateMarketBatchDao.findMissingCoordinateTargetsByReportId(reportId);
         int successCount = 0;
         int failedCount = 0;
         for (HouseCoordinateTarget target : targets) {
@@ -71,22 +84,21 @@ public class HouseCoordinateEnrichmentService {
                 Coordinate coordinate = requestCoordinate(target.address());
                 if (coordinate == null) {
                     failedCount++;
-                    System.out.println("[EstateBatch-Geocoding] 주소 검색 결과 없음. aptSeq="
+                    System.out.println("[" + batchName + "-Geocoding] 주소 검색 결과 없음. aptSeq="
                         + target.aptSeq() + ", address=" + target.address());
                 } else {
-                    estateMarketBatchDao.updateHouseCoordinates(
-                        target.aptSeq(), coordinate.latitude(), coordinate.longitude());
+                    updater.update(target.aptSeq(), coordinate.latitude(), coordinate.longitude());
                     successCount++;
                 }
             } catch (Exception exception) {
                 // 특정 주소 하나의 실패가 전체 매매 적재를 롤백시키지 않도록 해당 대상만 기록하고 계속 진행한다.
                 failedCount++;
-                System.err.println("[EstateBatch-Geocoding] 좌표 보강 실패. aptSeq="
+                System.err.println("[" + batchName + "-Geocoding] 좌표 보강 실패. aptSeq="
                     + target.aptSeq() + ", reason=" + exception.getMessage());
             }
             sleepBetweenRequests();
         }
-        System.out.println("[EstateBatch-Geocoding] reportId=" + reportId
+        System.out.println("[" + batchName + "-Geocoding] reportId=" + reportId
             + ", targets=" + targets.size()
             + ", success=" + successCount
             + ", failed=" + failedCount);
@@ -131,5 +143,11 @@ public class HouseCoordinateEnrichmentService {
     }
 
     private record Coordinate(String latitude, String longitude) {
+    }
+
+    /** DAO 메서드 참조로 배치별 좌표 저장 방식을 전달한다. */
+    @FunctionalInterface
+    public interface HouseCoordinateUpdater {
+        int update(String aptSeq, String latitude, String longitude);
     }
 }

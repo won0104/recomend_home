@@ -24,9 +24,9 @@ public class PropertyApiController {
     private final RealEstateService realEstateService;
 
     @GetMapping("/search")
-    @Operation(summary = "실거래 검색", description = "공개 API입니다. 모든 조회 파라미터는 선택값이며, 테스트할 때는 lawdCd 또는 dong부터 넣어보면 좋습니다.")
+    @Operation(summary = "매매·전월세 실거래 검색", description = "공개 API입니다. contractType은 deal(매매), rent(전월세), all(전체)을 사용합니다. 모든 조회 파라미터는 선택값이며, 테스트할 때는 lawdCd 또는 dong부터 넣어보면 좋습니다.")
     public ResponseEntity<?> search(@Parameter(description = "주택 유형", example = "APT") @RequestParam(required = false) String housingType,
-                                    @Parameter(description = "계약 유형", example = "SALE") @RequestParam(required = false) String contractType,
+                                    @Parameter(description = "거래 유형: deal, rent, all", example = "rent") @RequestParam(required = false) String contractType,
                                     @Parameter(description = "거래 년월 또는 일자", example = "202401") @RequestParam(required = false) String dealYmd,
                                     @Parameter(description = "법정동 코드", example = "11680") @RequestParam(required = false) String lawdCd,
                                     @Parameter(description = "동명", example = "개포동") @RequestParam(required = false) String dong,
@@ -36,9 +36,9 @@ public class PropertyApiController {
     }
 
     @GetMapping("/summary")
-    @Operation(summary = "실거래 요약", description = "공개 API입니다. 실거래 검색과 같은 필터를 사용해 요약 값을 반환합니다.")
+    @Operation(summary = "매매·전월세 실거래 요약", description = "공개 API입니다. 실거래 검색과 같은 필터로 전체·매매·전월세 건수를 집계하고, 평균 매매가는 매매만 대상으로 반환합니다.")
     public ResponseEntity<?> summary(@Parameter(description = "주택 유형", example = "APT") @RequestParam(required = false) String housingType,
-                                     @Parameter(description = "계약 유형", example = "SALE") @RequestParam(required = false) String contractType,
+                                     @Parameter(description = "거래 유형: deal, rent, all", example = "rent") @RequestParam(required = false) String contractType,
                                      @Parameter(description = "거래 년월 또는 일자", example = "202401") @RequestParam(required = false) String dealYmd,
                                      @Parameter(description = "법정동 코드", example = "11680") @RequestParam(required = false) String lawdCd,
                                      @Parameter(description = "동명", example = "개포동") @RequestParam(required = false) String dong,

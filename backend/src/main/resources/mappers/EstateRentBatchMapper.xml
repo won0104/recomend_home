@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.batch.dao.EstateRentBatchDao">
+
+    <resultMap id="estateRentItemMap" type="com.ssafy.prj.batch.domain.EstateRentItem">
+        <result column="report_id" property="reportId" />
+        <result column="source_type" property="sourceType" />
+        <result column="lawd_cd" property="lawdCd" />
+        <result column="deal_ymd" property="dealYmd" />
+        <result column="apt_name" property="aptName" />
+        <result column="dong" property="dong" />
+        <result column="jibun" property="jibun" />
+        <result column="deposit" property="deposit" />
+        <result column="monthly_rent" property="monthlyRent" />
+        <result column="area" property="area" />
+        <result column="floor" property="floor" />
+        <result column="build_year" property="buildYear" />
+        <result column="deal_date" property="dealDate" />
+        <result column="contract_term" property="contractTerm" />
+        <result column="contract_type" property="contractType" />
+        <result column="use_rr_right" property="useRrRight" />
+        <result column="pre_deposit" property="preDeposit" />
+        <result column="pre_monthly_rent" property="preMonthlyRent" />
+    </resultMap>
+
+    <resultMap id="estateRentReportMap" type="com.ssafy.prj.batch.domain.EstateRentReport">
+        <id column="report_id" property="reportId" />
+        <result column="lawd_cd" property="lawdCd" />
+        <result column="deal_ymd" property="dealYmd" />
+        <result column="collected_at" property="collectedAt" />
+        <result column="item_count" property="itemCount" />
+        <result column="jeonse_count" property="jeonseCount" />
+        <result column="monthly_rent_count" property="monthlyRentCount" />
+    </resultMap>
+
+    <!-- 매매와 같은 아파트 식별자를 쓰기 위해 houseinfos 구조를 동일하게 보장한다. -->
+    <update id="createHouseInfoTable">
+        CREATE TABLE IF NOT EXISTS houseinfos (
+            apt_seq VARCHAR(20) NOT NULL COMMENT '아파트코드',
+            sgg_cd VARCHAR(5) NULL COMMENT '시군구코드',
+            umd_cd VARCHAR(5) NULL COMMENT '읍면동코드',
+            umd_nm VARCHAR(20) NULL COMMENT '읍면동이름',
+            jibun VARCHAR(10) NULL COMMENT '지번',
+            road_nm_sgg_cd VARCHAR(5) NULL COMMENT '도로명시군구코드',
+            road_nm VARCHAR(20) NULL COMMENT '도로명',
+            road_nm_bonbun VARCHAR(10) NULL COMMENT '도로명기초번호',
+            road_nm_bubun VARCHAR(10) NULL COMMENT '도로명추가번호',
+            apt_nm VARCHAR(40) NULL COMMENT '아파트이름',
+            build_year INT NULL COMMENT '준공년도',
+            latitude VARCHAR(45) NULL COMMENT '위도',
+            longitude VARCHAR(45) NULL COMMENT '경도',
+            PRIMARY KEY (apt_seq)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    </update>
+
+    <update id="createHouseRentsTable">
+        CREATE TABLE IF NOT EXISTS houserents (
+            rent_id BIGINT NOT NULL AUTO_INCREMENT COMMENT '전월세 거래 식별자',
+            apt_seq VARCHAR(20) NOT NULL COMMENT 'houseinfos 아파트 코드',
+            floor VARCHAR(3) NULL COMMENT '층',
+            deal_year INT NOT NULL COMMENT '계약 연도',
+            deal_month INT NOT NULL COMMENT '계약 월',
+            deal_day INT NOT NULL COMMENT '계약 일',
+            exclu_use_ar DECIMAL(7, 2) NULL COMMENT '전용면적(㎡)',
+            deposit INT NOT NULL DEFAULT 0 COMMENT '보증금(만원)',
+            monthly_rent INT NOT NULL DEFAULT 0 COMMENT '월세(만원), 0이면 전세',
+            contract_term VARCHAR(50) NULL COMMENT '계약기간 원문',
+            contract_type VARCHAR(30) NULL COMMENT '계약구분 원문(신규·갱신 등)',
+            use_rr_right VARCHAR(30) NULL COMMENT '갱신요구권 사용 여부 원문',
+            pre_deposit INT NULL COMMENT '종전 보증금(만원)',
+            pre_monthly_rent INT NULL COMMENT '종전 월세(만원)',
+            source_hash CHAR(64) NOT NULL COMMENT '원천 응답 기반 중복 방지 해시',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (rent_id),
+            UNIQUE KEY uk_houserents_source_hash (source_hash),
+            KEY idx_houserents_apt_date (apt_seq, deal_year, deal_month, deal_day),
+            CONSTRAINT fk_houserents_houseinfos
+                FOREIGN KEY (apt_seq) REFERENCES houseinfos (apt_seq)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    </update>
+
+    <update id="createReportTable">
+        CREATE TABLE IF NOT EXISTS batch_estate_rent_reports (
+            report_id VARCHAR(40) PRIMARY KEY,
+            lawd_cd VARCHAR(200) NOT NULL,
+            deal_ymd VARCHAR(200) NOT NULL,
+            collected_at VARCHAR(30) NOT NULL,
+            item_count INT NOT NULL DEFAULT 0,
+            jeonse_count INT NOT NULL DEFAULT 0,
+            monthly_rent_count INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    </update>
+
+    <update id="createItemTable">
+        CREATE TABLE IF NOT EXISTS batch_estate_rent_items (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            report_id VARCHAR(40) NOT NULL,
+            source_type VARCHAR(20) NOT NULL,
+            lawd_cd VARCHAR(10) NOT NULL,
+            deal_ymd VARCHAR(6) NOT NULL,
+            apt_name VARCHAR(200) NOT NULL,
+            dong VARCHAR(100),
+            jibun VARCHAR(100),
+            deposit INT NOT NULL DEFAULT 0,
+            monthly_rent INT NOT NULL DEFAULT 0,
+            area DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            floor INT NOT NULL DEFAULT 0,
+            build_year INT NOT NULL DEFAULT 0,
+            deal_date VARCHAR(10),
+            contract_term VARCHAR(50),
+            contract_type VARCHAR(30),
+            use_rr_right VARCHAR(30),
+            pre_deposit INT NULL,
+            pre_monthly_rent INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_batch_estate_rent_report_id (report_id),
+            INDEX idx_batch_estate_rent_lawd_deal (lawd_cd, deal_ymd)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    </update>
+
+    <insert id="insertReport" parameterType="com.ssafy.prj.batch.domain.EstateRentReport">
+        INSERT INTO batch_estate_rent_reports
+            (report_id, lawd_cd, deal_ymd, collected_at, item_count, jeonse_count, monthly_rent_count)
+        VALUES
+            (#{reportId}, #{lawdCd}, #{dealYmd}, #{collectedAt}, #{itemCount}, #{jeonseCount}, #{monthlyRentCount})
+    </insert>
+
+    <insert id="insertItems">
+        INSERT INTO batch_estate_rent_items
+            (report_id, source_type, lawd_cd, deal_ymd, apt_name, dong, jibun, deposit, monthly_rent,
+             area, floor, build_year, deal_date, contract_term, contract_type, use_rr_right,
+             pre_deposit, pre_monthly_rent)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{item.reportId}, #{item.sourceType}, #{item.lawdCd}, #{item.dealYmd},
+             #{item.aptName}, #{item.dong}, #{item.jibun}, #{item.deposit}, #{item.monthlyRent},
+             #{item.area}, #{item.floor}, #{item.buildYear}, #{item.dealDate}, #{item.contractTerm},
+             #{item.contractType}, #{item.useRrRight}, #{item.preDeposit}, #{item.preMonthlyRent})
+        </foreach>
+    </insert>
+
+    <select id="findReportById" resultMap="estateRentReportMap">
+        SELECT report_id, lawd_cd, deal_ymd, collected_at, item_count, jeonse_count, monthly_rent_count
+        FROM batch_estate_rent_reports
+        WHERE report_id = #{reportId}
+    </select>
+
+    <select id="findItemsByReportId" resultMap="estateRentItemMap">
+        SELECT report_id, source_type, lawd_cd, deal_ymd, apt_name, dong, jibun, deposit, monthly_rent,
+               area, floor, build_year, deal_date, contract_term, contract_type, use_rr_right,
+               pre_deposit, pre_monthly_rent
+        FROM batch_estate_rent_items
+        WHERE report_id = #{reportId}
+        ORDER BY id
+    </select>
+
+    <!-- 매매 배치와 동일한 법정동·지번·아파트명 해시로 apt_seq를 만든다. -->
+    <insert id="upsertHouseInfos">
+        INSERT INTO houseinfos
+            (apt_seq, sgg_cd, umd_cd, umd_nm, jibun, road_nm_sgg_cd, road_nm,
+             road_nm_bonbun, road_nm_bubun, apt_nm, build_year, latitude, longitude)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (CONCAT('BT', #{item.lawdCd}, '-', SUBSTRING(MD5(CONCAT_WS('|',
+                #{item.lawdCd}, #{item.dong}, #{item.jibun}, #{item.aptName})), 1, 10)),
+             #{item.lawdCd},
+             COALESCE((
+                SELECT SUBSTRING(dc.dong_code, 6, 5)
+                FROM dongcodes dc
+                WHERE dc.dong_code LIKE CONCAT(#{item.lawdCd}, '%')
+                  AND dc.dong_name = #{item.dong}
+                LIMIT 1
+             ), '00000'),
+             #{item.dong}, #{item.jibun}, #{item.lawdCd}, '', '', '', #{item.aptName},
+             #{item.buildYear}, NULL, NULL)
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            apt_nm = VALUES(apt_nm),
+            build_year = VALUES(build_year),
+            umd_nm = VALUES(umd_nm),
+            jibun = VALUES(jibun),
+            umd_cd = VALUES(umd_cd)
+    </insert>
+
+    <!-- source_hash의 유니크 키가 같은 원천 응답을 한 번만 저장한다. -->
+    <insert id="insertNewHouseRents">
+        INSERT INTO houserents
+            (apt_seq, floor, deal_year, deal_month, deal_day, exclu_use_ar, deposit, monthly_rent,
+             contract_term, contract_type, use_rr_right, pre_deposit, pre_monthly_rent, source_hash)
+        SELECT v.apt_seq, v.floor, v.deal_year, v.deal_month, v.deal_day, v.exclu_use_ar,
+               v.deposit, v.monthly_rent, v.contract_term, v.contract_type, v.use_rr_right,
+               v.pre_deposit, v.pre_monthly_rent,
+               SHA2(CONCAT_WS('|', v.apt_seq, v.floor, v.deal_year, v.deal_month, v.deal_day,
+                    v.exclu_use_ar, v.deposit, v.monthly_rent, v.contract_term, v.contract_type,
+                    v.use_rr_right, v.pre_deposit, v.pre_monthly_rent), 256) AS source_hash
+        FROM (
+        <foreach collection="items" item="item" separator=" UNION ALL ">
+            SELECT
+                CONCAT('BT', #{item.lawdCd}, '-', SUBSTRING(MD5(CONCAT_WS('|',
+                    #{item.lawdCd}, #{item.dong}, #{item.jibun}, #{item.aptName})), 1, 10)) AS apt_seq,
+                CAST(#{item.floor} AS CHAR) AS floor,
+                CAST(SUBSTRING(#{item.dealDate}, 1, 4) AS UNSIGNED) AS deal_year,
+                CAST(SUBSTRING(#{item.dealDate}, 6, 2) AS UNSIGNED) AS deal_month,
+                CAST(SUBSTRING(#{item.dealDate}, 9, 2) AS UNSIGNED) AS deal_day,
+                #{item.area} AS exclu_use_ar,
+                #{item.deposit} AS deposit,
+                #{item.monthlyRent} AS monthly_rent,
+                #{item.contractTerm} AS contract_term,
+                #{item.contractType} AS contract_type,
+                #{item.useRrRight} AS use_rr_right,
+                #{item.preDeposit} AS pre_deposit,
+                #{item.preMonthlyRent} AS pre_monthly_rent
+        </foreach>
+        ) v
+        WHERE v.deal_year IS NOT NULL AND v.deal_year &gt; 0
+        ON DUPLICATE KEY UPDATE
+            contract_term = VALUES(contract_term),
+            contract_type = VALUES(contract_type),
+            use_rr_right = VALUES(use_rr_right),
+            pre_deposit = VALUES(pre_deposit),
+            pre_monthly_rent = VALUES(pre_monthly_rent)
+    </insert>
+
+    <update id="normalizeLegalDongCodesForReport">
+        UPDATE houseinfos hi
+        JOIN (
+            SELECT DISTINCT CONCAT('BT', item.lawd_cd, '-', SUBSTRING(MD5(CONCAT_WS('|',
+                item.lawd_cd, item.dong, item.jibun, item.apt_name
+            )), 1, 10)) AS apt_seq
+            FROM batch_estate_rent_items item
+            WHERE item.report_id = #{reportId}
+        ) report_item ON report_item.apt_seq = hi.apt_seq
+        JOIN dongcodes dc ON dc.dong_code LIKE CONCAT(hi.sgg_cd, '%')
+            AND REPLACE(dc.dong_name, ' ', '') = REPLACE(hi.umd_nm, ' ', '')
+        SET hi.umd_cd = SUBSTRING(dc.dong_code, 6, 5)
+        WHERE hi.umd_cd IS NULL OR hi.umd_cd = '' OR hi.umd_cd = '00000'
+    </update>
+
+    <!-- 매매와 같은 houseinfos를 사용하므로, 이미 좌표가 있으면 전월세 배치에서는 API를 다시 부르지 않는다. -->
+    <select id="findMissingCoordinateTargetsByReportId"
+            resultType="com.ssafy.prj.batch.domain.HouseCoordinateTarget">
+        SELECT DISTINCT
+            hi.apt_seq AS aptSeq,
+            TRIM(CONCAT_WS(' ', dc.sido_name, dc.gugun_name, hi.umd_nm, hi.jibun)) AS address
+        FROM batch_estate_rent_items item
+        JOIN houseinfos hi ON hi.apt_seq = CONCAT('BT', item.lawd_cd, '-', SUBSTRING(MD5(CONCAT_WS('|',
+            item.lawd_cd, item.dong, item.jibun, item.apt_name
+        )), 1, 10))
+        JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, '00000')
+        WHERE item.report_id = #{reportId}
+          AND (hi.latitude IS NULL OR hi.latitude = '' OR hi.longitude IS NULL OR hi.longitude = '')
+          AND hi.jibun IS NOT NULL AND hi.jibun != ''
+          AND dc.gugun_name IS NOT NULL
+        ORDER BY hi.apt_seq
+    </select>
+
+    <update id="updateHouseCoordinates">
+        UPDATE houseinfos
+        SET latitude = #{latitude}, longitude = #{longitude}
+        WHERE apt_seq = #{aptSeq}
+    </update>
+
+    <select id="selectAllLawdCodes" resultType="string">
+        SELECT DISTINCT SUBSTRING(dong_code, 1, 5) AS lawd_cd
+        FROM dongcodes
+        WHERE dong_code IS NOT NULL AND LENGTH(dong_code) &gt;= 5
+        ORDER BY lawd_cd
+    </select>
+
+    <select id="selectLawdCodesBySido" resultType="string">
+        SELECT DISTINCT SUBSTRING(dong_code, 1, 5) AS lawd_cd
+        FROM dongcodes
+        WHERE sido_name = #{sidoName}
+          AND gugun_name IS NOT NULL
+          AND dong_code IS NOT NULL AND LENGTH(dong_code) &gt;= 5
+        ORDER BY lawd_cd
+    </select>
+</mapper>

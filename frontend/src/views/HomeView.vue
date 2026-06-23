@@ -40,6 +40,19 @@ const selectedRegionText = computed(() => {
   return [sido, sigungu].filter(Boolean).join(' ')
 })
 
+function selectedDongName() {
+  return emdList.value.find((item) => item.code === search.value.emd)?.name || undefined
+}
+
+function transactionAmountText(item) {
+  if (item.contractType !== 'rent') {
+    return number(item.amount || item.dealAmount)
+  }
+  const deposit = number(item.deposit ?? item.amount ?? 0)
+  const monthlyRent = Number(item.monthlyRent || 0)
+  return monthlyRent > 0 ? `보증금 ${deposit} / 월세 ${number(monthlyRent)}` : `전세 ${deposit}`
+}
+
 async function runSearch() {
   loading.value = true
   statusMessage.value = ''
@@ -47,7 +60,9 @@ async function runSearch() {
     lawdCd: search.value.lawdCode || undefined,
     dealYmd: search.value.dealYmd || undefined,
     housingType: search.value.housingType,
-    contractType: search.value.contractType
+    contractType: search.value.contractType,
+    dong: selectedDongName(),
+    keyword: search.value.keyword || undefined
   }
   try {
     const [response, summaryResponse] = await Promise.all([
@@ -287,13 +302,13 @@ onMounted(async () => {
               </thead>
               <tbody>
                 <tr v-if="results.length === 0"><td colspan="7" class="empty-state">검색을 실행해 주세요.</td></tr>
-                <tr v-for="item in results" :key="`${item.aptSeq || item.aptNm}-${item.date}-${item.floor}`">
+                <tr v-for="item in results" :key="item.id || `${item.aptSeq || item.aptNm}-${item.date}-${item.floor}`">
                   <td class="mono">{{ item.date || item.dealDate || '' }}</td>
-                  <td><span class="chip" :class="item.contractType === 'rent' ? 'is-accent' : 'is-primary'">{{ item.contractType || item.type || '매매' }}</span></td>
+                  <td><span class="chip" :class="item.contractType === 'rent' ? 'is-accent' : 'is-primary'">{{ item.contractType === 'rent' ? '전월세' : '매매' }}</span></td>
                   <td>{{ item.aptNm || item.houseName || item.name }}</td>
                   <td>{{ item.dong || item.umdNm }}</td>
                   <td class="text-end mono">{{ item.area }}</td>
-                  <td class="text-end"><span class="money">{{ number(item.amount || item.dealAmount) }}</span></td>
+                  <td class="text-end"><span class="money">{{ transactionAmountText(item) }}</span></td>
                   <td class="text-end mono">{{ item.floor }}</td>
                 </tr>
               </tbody>
