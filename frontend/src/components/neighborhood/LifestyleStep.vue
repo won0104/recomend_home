@@ -4,7 +4,8 @@ import { computed } from 'vue'
 const props = defineProps({
   lifestyleOptions: { type: Array, required: true },
   selectedLifestyleIds: { type: Array, required: true },
-  lifestyleMood: { type: String, required: true }
+  lifestyleMood: { type: String, required: true },
+  submitting: { type: Boolean, default: false }
 })
 
 const emit = defineEmits([
@@ -90,7 +91,9 @@ function lifestyleRank(id) {
       <!-- 부모 View가 모든 조건을 모아 최종 추천 API를 호출할 수 있게 submit 이벤트만 올립니다. -->
       <div class="lifestyle-actions">
         <button type="button" class="btn btn-outline-secondary" @click="emit('prev')">이전</button>
-        <button type="button" class="btn btn-primary" @click="emit('submit')">동네 추천받기 ✨</button>
+        <button type="button" class="btn btn-primary" :disabled="submitting" @click="emit('submit')">
+          {{ submitting ? '후보 찾는 중' : '동네 추천받기 ✨' }}
+        </button>
       </div>
 
       <p class="lifestyle-note">

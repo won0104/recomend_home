@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.neighborhood.NeighborhoodRecommendMapper">
+
+    <sql id="distanceExpression">
+        (6371 * ACOS(LEAST(1, GREATEST(-1,
+            COS(RADIANS(#{originLat})) * COS(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8)))) *
+            COS(RADIANS(CAST(hi.longitude AS DECIMAL(12, 8))) - RADIANS(#{originLng})) +
+            SIN(RADIANS(#{originLat})) * SIN(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8))))
+        ))))
+    </sql>
+
+    <sql id="legalDongCodeBase">
+        SELECT
+            CONCAT(hi.sgg_cd, hi.umd_cd) AS legal_dong_code,
+            CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) AS amount,
+            <include refid="distanceExpression" /> AS distance_km
+        FROM housedeals hd
+        JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
+        WHERE hi.latitude IS NOT NULL
+          AND hi.longitude IS NOT NULL
+          AND hi.latitude != ''
+          AND hi.longitude != ''
+    </sql>
+
+    <select id="findLegalDongCodes" resultType="string">
+        SELECT DISTINCT c.legal_dong_code
+        FROM (
+            <include refid="legalDongCodeBase" />
+        ) c
+        WHERE c.distance_km &lt;= #{radiusKm}
+        <if test="maxPrice != null">
+            AND c.amount &lt;= #{maxPrice}
+        </if>
+        ORDER BY c.legal_dong_code
+    </select>
+</mapper>

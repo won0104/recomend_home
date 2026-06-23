@@ -5,16 +5,16 @@ import LifestyleStep from '../components/neighborhood/LifestyleStep.vue'
 import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
+import { recommendNeighborhood } from '../api/neighborhoods'
 
 const selectedPlace = ref(null)
 const screen = ref('search')
 
 const commuteRadius = ref(30)
 const budgetAmount = ref(3)
-const dealType = ref('all')
-const housingType = ref('apartment')
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
+const recommendLoading = ref(false)
 
 const lifestyleOptions = [
   { id: 'cafe', icon: '☕', title: '카페·외식' },
@@ -31,14 +31,14 @@ const currentStep = computed(() => {
   return 1
 })
 const selectedAddress = computed(() => selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || '')
+const maxPrice = computed(() => Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000))
 
 const recommendationCondition = computed(() => ({
-  origin: selectedPlace.value,
+  latitude: Number(selectedPlace.value?.y),
+  longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
-  budgetAmount: budgetAmount.value,
-  dealType: dealType.value,
-  housingType: housingType.value,
-  lifestyleIds: selectedLifestyleIds.value,
+  maxPrice: maxPrice.value,
+  priorities: selectedLifestyleIds.value.map((category) => category.toUpperCase()),
   lifestyleMood: lifestyleMood.value
 }))
 
@@ -71,9 +71,17 @@ function backToBudgetStep() {
   screen.value = 'budget'
 }
 
-function submitRecommendation() {
-  // 추천 API가 연결되면 recommendationCondition.value를 요청 payload로 사용하면 됩니다.
-  console.info('neighborhood recommendation condition', recommendationCondition.value)
+async function submitRecommendation() {
+  recommendLoading.value = true
+
+  try {
+    // 백엔드는 반경/예산으로 매매 후보를 걸러내고, 다음 추천 로직에 필요한 법정동 후보를 함께 내려줍니다.
+    await recommendNeighborhood(recommendationCondition.value)
+  } catch (error) {
+    console.error(error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.')
+  } finally {
+    recommendLoading.value = false
+  }
 }
 </script>
 
@@ -118,8 +126,6 @@ function submitRecommendation() {
         <BudgetStep
           v-else-if="screen === 'budget'"
           v-model:budget-amount="budgetAmount"
-          v-model:deal-type="dealType"
-          v-model:housing-type="housingType"
           @prev="backToRadiusStep"
           @next="openLifestyleStep"
         />
@@ -129,6 +135,7 @@ function submitRecommendation() {
           v-model:selected-lifestyle-ids="selectedLifestyleIds"
           v-model:lifestyle-mood="lifestyleMood"
           :lifestyle-options="lifestyleOptions"
+          :submitting="recommendLoading"
           @prev="backToBudgetStep"
           @submit="submitRecommendation"
         />
