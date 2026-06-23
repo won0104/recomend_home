@@ -1,5 +1,8 @@
 package com.ssafy.prj.model.dto.neighborhood;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import lombok.Data;
 
 /**
@@ -13,4 +16,6 @@ public class RecommendedNeighborhood {
     private String sigunguName;
     private String dongName;
     private Double score;
+    /** 사용자가 선택한 순서대로 카테고리별 점수 내역을 담는다. */
+    private List<CategoryScore> categoryScores = new ArrayList<>();
 }

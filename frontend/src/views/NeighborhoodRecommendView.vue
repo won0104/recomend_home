@@ -1,11 +1,15 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import BudgetStep from '../components/neighborhood/BudgetStep.vue'
 import LifestyleStep from '../components/neighborhood/LifestyleStep.vue'
+import NeighborhoodResultMap from '../components/neighborhood/NeighborhoodResultMap.vue'
 import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
+import { fetchHouses } from '../api/houses'
 import { recommendNeighborhood } from '../api/neighborhoods'
+import { number } from '../utils/format'
 
 const selectedPlace = ref(null)
 const screen = ref('search')
@@ -15,89 +19,126 @@ const budgetAmount = ref(3)
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
+const recommendations = ref([])
+
+// 상세 화면
+const selectedNeighborhood = ref(null)
+const houseList = ref([])
+const houseLoading = ref(false)
 
 const lifestyleOptions = [
-  // id는 백엔드 SurveyCategory enum 이름과 동일해야 한다.
-  // 이 값을 그대로 전송하면 별도의 화면용 코드 변환 없이 점수 계산기로 연결된다.
-  { id: 'CAFE', icon: '☕', title: '카페·외식' },
-  { id: 'CULTURE', icon: '⌁', title: '운동·문화' },
+  { id: 'CAFE',     icon: '☕', title: '카페·외식' },
+  { id: 'CULTURE',  icon: '⌁',  title: '운동·문화' },
   { id: 'SHOPPING', icon: '🛒', title: '장보기·생활편의' },
-  { id: 'SCHOOL', icon: '▱', title: '학교·교육' },
-  { id: 'PARK', icon: '♣', title: '공원·산책' },
-  { id: 'MEDICAL', icon: '⚕', title: '의료' },
-  { id: 'PET', icon: '🐾', title: '반려인' }
+  { id: 'SCHOOL',   icon: '🏫', title: '학교·교육' },
+  { id: 'PARK',     icon: '🌳', title: '공원·산책' },
+  { id: 'MEDICAL',  icon: '⚕',  title: '의료' },
+  { id: 'PET',      icon: '🐾', title: '반려인' },
 ]
+
+const categoryLabel = {
+  CAFE: '카페·외식', CULTURE: '운동·문화', SHOPPING: '장보기·생활편의',
+  SCHOOL: '학교·교육', PARK: '공원·산책', MEDICAL: '의료', PET: '반려인',
+}
+
+const categoryDesc = {
+  SCHOOL:   { high: '학교가 많아 교육 환경이 우수합니다.', mid: '교육 시설이 평균 수준입니다.', low: '학교가 다소 부족합니다.' },
+  PARK:     { high: '공원이 가까워 산책·야외 활동이 편합니다.', mid: '공원 접근성이 보통입니다.', low: '공원이 다소 부족합니다.' },
+  CAFE:     { high: '카페와 식당이 풍부해 외식이 편리합니다.', mid: '카페·외식 환경이 보통입니다.', low: '카페·식당이 다소 부족합니다.' },
+  CULTURE:  { high: '문화·스포츠 시설이 풍부합니다.', mid: '문화시설이 평균 수준입니다.', low: '문화시설이 다소 부족합니다.' },
+  SHOPPING: { high: '마트와 편의시설이 가까워 생활이 편리합니다.', mid: '생활편의시설이 평균 수준입니다.', low: '생활편의시설이 다소 부족합니다.' },
+  MEDICAL:  { high: '병원·의원이 가까워 의료 접근성이 좋습니다.', mid: '의료시설이 평균 수준입니다.', low: '의료시설이 다소 부족합니다.' },
+  PET:      { high: '동물병원·공원이 가까워 반려동물 생활이 쾌적합니다.', mid: '반려동물 인프라가 보통입니다.', low: '반려동물 관련 시설이 부족합니다.' },
+}
+
+function scoreLevel(score) {
+  if (score >= 65) return 'high'
+  if (score >= 35) return 'mid'
+  return 'low'
+}
+
+const strengthLabel = {
+  PARK: '공원 접근 우수', CAFE: '카페·외식 밀집', SCHOOL: '학교 인접',
+  SHOPPING: '생활편의 풍부', MEDICAL: '의료 인프라', CULTURE: '문화시설 우수', PET: '반려인 환경',
+}
+const weaknessLabel = {
+  PARK: '공원 다소 부족', CAFE: '카페 다소 부족', SCHOOL: '학교 다소 부족',
+  SHOPPING: '편의시설 다소 부족', MEDICAL: '의료시설 다소 부족', CULTURE: '문화시설 다소 부족', PET: '반려 인프라 부족',
+}
+
+function getStrengthTags(categoryScores) {
+  return categoryScores.filter((cs) => cs.score >= 65).map((cs) => strengthLabel[cs.category] ?? cs.category)
+}
+function getWeaknessTags(categoryScores) {
+  return categoryScores.filter((cs) => cs.score < 40).map((cs) => weaknessLabel[cs.category] ?? cs.category)
+}
+
+const RANK_COLORS = { 1: '#4F6AF5', 2: '#22C55E', 3: '#F97316' }
 
 const currentStep = computed(() => {
   if (screen.value === 'budget') return 2
   if (screen.value === 'lifestyle') return 3
   return 1
 })
-const selectedAddress = computed(() => selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || '')
-const maxPrice = computed(() => Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000))
-
+const selectedAddress = computed(() =>
+  selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || ''
+)
+const maxPrice = computed(() =>
+  Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000)
+)
+const budgetLabel = computed(() =>
+  Number(budgetAmount.value) >= 10 ? '제한 없음' : `${budgetAmount.value}억원 이하`
+)
+const baseLocation = computed(() =>
+  selectedPlace.value ? { lat: Number(selectedPlace.value.y), lng: Number(selectedPlace.value.x) } : null
+)
+const priorityLabels = computed(() =>
+  selectedLifestyleIds.value.map((id) => lifestyleOptions.find((o) => o.id === id)?.title ?? id)
+)
 const recommendationCondition = computed(() => ({
   latitude: Number(selectedPlace.value?.y),
   longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
   maxPrice: maxPrice.value,
-  // id가 SurveyCategory 이름과 같으므로 선택 순서도 그대로 백엔드 1·2·3순위가 된다.
   priorities: selectedLifestyleIds.value,
-  lifestyleMood: lifestyleMood.value
+  lifestyleMood: lifestyleMood.value,
 }))
 
-function handlePlaceSelect(place) {
-  selectedPlace.value = place
-}
+function handlePlaceSelect(place) { selectedPlace.value = place }
+function openRadiusStep(place) { selectedPlace.value = place; screen.value = 'radius' }
+function openBudgetStep() { screen.value = 'budget' }
+function openLifestyleStep() { screen.value = 'lifestyle' }
+function backToSearch() { screen.value = 'search' }
+function backToRadiusStep() { screen.value = 'radius' }
+function backToBudgetStep() { screen.value = 'budget' }
+function backToLifestyleStep() { screen.value = 'lifestyle' }
+function backToResult() { screen.value = 'result' }
 
-function openRadiusStep(place) {
-  selectedPlace.value = place
-  screen.value = 'radius'
-}
-
-function openBudgetStep() {
-  screen.value = 'budget'
-}
-
-function openLifestyleStep() {
-  screen.value = 'lifestyle'
-}
-
-function backToSearch() {
-  screen.value = 'search'
-}
-
-function backToRadiusStep() {
-  screen.value = 'radius'
-}
-
-function backToBudgetStep() {
-  screen.value = 'budget'
+async function openDetail(rec) {
+  selectedNeighborhood.value = rec
+  screen.value = 'detail'
+  houseLoading.value = true
+  houseList.value = []
+  try {
+    const res = await fetchHouses({ lawdCd: rec.lawdCd })
+    houseList.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    houseList.value = []
+  } finally {
+    houseLoading.value = false
+  }
 }
 
 async function submitRecommendation() {
-  // 백엔드 점수 서비스는 1·2·3순위 가중치를 적용하므로 정확히 3개를 선택해야 한다.
   if (selectedLifestyleIds.value.length !== 3) {
     alert('생활 우선순위를 정확히 3개 선택해주세요.')
     return
   }
-
   recommendLoading.value = true
-
   try {
-    // 응답의 data.recommendations에는 코드·지역명·점수·순위가 담긴 최종 상위 3개가 들어 있다.
     const response = await recommendNeighborhood(recommendationCondition.value)
-    const recommendations = response?.data?.recommendations ?? []
-
-    // 결과 화면을 붙이기 전에도 브라우저 개발자 도구에서 추천 결과를 즉시 확인할 수 있게 출력한다.
-    console.table(recommendations.map((recommendation) => ({
-      rank: recommendation.rank,
-      dongCode: recommendation.lawdCd,
-      name: [recommendation.sidoName, recommendation.sigunguName, recommendation.dongName]
-        .filter(Boolean)
-        .join(' '),
-      score: recommendation.score
-    })))
+    recommendations.value = response?.data?.recommendations ?? []
+    screen.value = 'result'
   } catch (error) {
     console.error(error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.')
   } finally {
@@ -108,33 +149,209 @@ async function submitRecommendation() {
 
 <template>
   <main class="place-finder-page">
+
+    <!-- ① 장소 검색 -->
     <template v-if="screen === 'search'">
       <section class="place-finder-hero">
         <div class="place-finder-badge">맞춤 동네 추천 서비스</div>
-        <h1>
-          나에게 딱 맞는<br />
-          <span>완벽한 동네</span>를 찾아드립니다
-        </h1>
+        <h1>나에게 딱 맞는<br /><span>완벽한 동네</span>를 찾아드립니다</h1>
       </section>
-
       <div class="place-finder-shell">
         <PlaceSearchStep @select-place="handlePlaceSelect" @next="openRadiusStep" />
       </div>
     </template>
 
+    <!-- ② 추천 결과 -->
+    <template v-else-if="screen === 'result'">
+      <div class="nr-result-page">
+        <section class="nr-result-left">
+          <p class="nr-result-eyebrow">동네 추천</p>
+          <h2 class="nr-result-title">회원님의 조건에 맞는 <strong>추천 동네</strong>에요</h2>
+          <div class="nr-conditions">
+            <span>기준 위치까지 직선거리 {{ commuteRadius }}km 이하</span>
+            <span class="nr-cond-sep">|</span>
+            <span>예산 {{ budgetLabel }}</span>
+          </div>
+          <div class="nr-priorities">
+            <span v-for="(label, i) in priorityLabels" :key="i" class="nr-priority-tag">
+              <em>{{ ['①', '②', '③'][i] }}</em> {{ label }}
+            </span>
+          </div>
+
+          <div v-if="recommendations.length === 0" class="nr-empty">
+            조건에 맞는 동네를 찾지 못했습니다. 반경이나 예산을 조정해보세요.
+          </div>
+
+          <ul v-else class="nr-card-list">
+            <li
+              v-for="rec in recommendations"
+              :key="rec.lawdCd"
+              class="nr-card"
+              :class="`nr-card--rank${rec.rank}`"
+              role="button"
+              tabindex="0"
+              @click="openDetail(rec)"
+              @keydown.enter="openDetail(rec)"
+            >
+              <div class="nr-card__rank">{{ rec.rank }}위</div>
+              <div class="nr-card__body">
+                <div class="nr-card__name-row">
+                  <span class="nr-card__dong">{{ rec.dongName }}</span>
+                  <span class="nr-card__district">{{ [rec.sidoName, rec.sigunguName].filter(Boolean).join(' ') }}</span>
+                </div>
+                <div class="nr-card__meta">
+                  <span>생활 성향 적합도 <strong>{{ rec.score.toFixed(0) }}%</strong></span>
+                </div>
+                <div class="nr-card__tags" v-if="getStrengthTags(rec.categoryScores).length">
+                  <span class="nr-card__tags-label">주요 강점:</span>
+                  <span v-for="tag in getStrengthTags(rec.categoryScores)" :key="tag" class="nr-card__tag nr-card__tag--strength">{{ tag }}</span>
+                </div>
+                <div class="nr-card__tags" v-if="getWeaknessTags(rec.categoryScores).length">
+                  <span class="nr-card__tags-label">주요 약점:</span>
+                  <span v-for="tag in getWeaknessTags(rec.categoryScores)" :key="tag" class="nr-card__tag nr-card__tag--weakness">{{ tag }}</span>
+                </div>
+                <span class="nr-card__detail-hint">클릭해서 매물 보기 →</span>
+              </div>
+              <div class="nr-card__score-circle" :class="`nr-card__score-circle--rank${rec.rank}`">
+                <span class="nr-card__score-num">{{ rec.score.toFixed(0) }}</span>
+                <span class="nr-card__score-unit">점</span>
+              </div>
+            </li>
+          </ul>
+
+          <p class="nr-disclaimer">추천 점수는 공개된 공공데이터를 기반으로 분석되며, 실제 생활 환경과 다를 수 있습니다.</p>
+          <button class="nr-retry-btn" @click="backToLifestyleStep">다시 설정하기</button>
+        </section>
+
+        <aside class="nr-result-right">
+          <NeighborhoodResultMap :base-location="baseLocation" :neighborhoods="recommendations" class="nr-result-map" />
+        </aside>
+      </div>
+    </template>
+
+    <!-- ③ 동네 상세 -->
+    <template v-else-if="screen === 'detail' && selectedNeighborhood">
+      <div class="nr-detail-page">
+
+        <!-- 헤더 -->
+        <div class="nr-detail-header">
+          <button class="nr-back-btn" @click="backToResult">← 추천 목록으로</button>
+          <div class="nr-detail-header__title">
+            <span
+              class="nr-detail-rank-badge"
+              :style="{ background: RANK_COLORS[selectedNeighborhood.rank] }"
+            >{{ selectedNeighborhood.rank }}위</span>
+            <h2>{{ selectedNeighborhood.dongName }}</h2>
+            <span class="nr-detail-district">
+              {{ [selectedNeighborhood.sidoName, selectedNeighborhood.sigunguName].filter(Boolean).join(' ') }}
+            </span>
+          </div>
+          <div
+            class="nr-detail-total-score"
+            :style="{ color: RANK_COLORS[selectedNeighborhood.rank], borderColor: RANK_COLORS[selectedNeighborhood.rank] }"
+          >
+            <span class="nr-detail-total-score__num">{{ selectedNeighborhood.score.toFixed(0) }}</span>
+            <span class="nr-detail-total-score__unit">점</span>
+          </div>
+        </div>
+
+        <!-- 2단 본문 -->
+        <div class="nr-detail-body">
+
+          <!-- 왼쪽: 강점 분석 -->
+          <section class="nr-detail-left">
+            <h3 class="nr-detail-section-title">동네 생활 분석</h3>
+
+            <ul class="nr-detail-score-list">
+              <li
+                v-for="cs in selectedNeighborhood.categoryScores"
+                :key="cs.category"
+                class="nr-detail-score-item"
+              >
+                <div class="nr-detail-score-item__head">
+                  <span class="nr-detail-score-item__name">{{ categoryLabel[cs.category] ?? cs.category }}</span>
+                  <span
+                    class="nr-detail-score-item__level"
+                    :class="`nr-detail-score-item__level--${scoreLevel(cs.score)}`"
+                  >{{ { high: '우수', mid: '보통', low: '부족' }[scoreLevel(cs.score)] }}</span>
+                  <span class="nr-detail-score-item__num">{{ cs.score.toFixed(0) }}점</span>
+                </div>
+                <div class="nr-detail-score-bar-wrap">
+                  <div
+                    class="nr-detail-score-bar"
+                    :class="`nr-detail-score-bar--${scoreLevel(cs.score)}`"
+                    :style="{ width: cs.score.toFixed(0) + '%' }"
+                  ></div>
+                </div>
+                <p class="nr-detail-score-item__desc">
+                  {{ categoryDesc[cs.category]?.[scoreLevel(cs.score)] }}
+                </p>
+              </li>
+            </ul>
+          </section>
+
+          <!-- 오른쪽: 매물 목록 (HouseListView 테이블 재사용) -->
+          <section class="nr-detail-right">
+            <h3 class="nr-detail-section-title">
+              이 동네 매물
+              <span class="nr-detail-house-count">{{ houseList.length }}건</span>
+            </h3>
+
+            <div v-if="houseLoading" class="nr-detail-loading">매물 불러오는 중...</div>
+
+            <div v-else-if="houseList.length === 0" class="nr-detail-empty">
+              등록된 매물이 없습니다.
+            </div>
+
+            <div v-else class="nr-detail-house-table-wrap">
+              <table class="table table-hover nr-detail-house-table">
+                <thead>
+                  <tr>
+                    <th>아파트명</th>
+                    <th>법정동</th>
+                    <th class="text-end">건축년도</th>
+                    <th class="text-end">거래수</th>
+                    <th class="text-end"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="house in houseList" :key="house.aptSeq">
+                    <td>
+                      <RouterLink :to="`/houses/${house.aptSeq}`" class="fw-bold article-link">
+                        {{ house.aptNm }}
+                      </RouterLink>
+                      <div class="small text-muted">{{ house.sidoName }} {{ house.gugunName }}</div>
+                    </td>
+                    <td class="small">{{ house.umdNm }}</td>
+                    <td class="text-end mono">{{ house.buildYear ?? '-' }}</td>
+                    <td class="text-end">
+                      <span class="mono fw-semibold">{{ number(house.dealCount) }}</span>
+                      <span class="small text-muted"> 건</span>
+                    </td>
+                    <td class="text-end">
+                      <RouterLink :to="`/houses/${house.aptSeq}`" class="btn btn-outline-primary btn-sm">
+                        상세
+                      </RouterLink>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </template>
+
+    <!-- ④ 조건 설정 단계 -->
     <template v-else>
       <section class="place-finder-hero place-condition-hero">
         <div class="place-finder-badge">동네 추천</div>
-        <h1>
-          나만의 조건으로<br />
-          <span>완벽한 동네</span>를 찾아보세요
-        </h1>
+        <h1>나만의 조건으로<br /><span>완벽한 동네</span>를 찾아보세요</h1>
         <p>3단계 설정만으로 당신에게 딱 맞는 동네를 추천받으세요</p>
       </section>
 
       <section class="condition-setup-shell" aria-label="동네 추천 조건 설정">
         <StepIndicator :current-step="currentStep" />
-
         <RadiusStep
           v-if="screen === 'radius'"
           v-model:commute-radius="commuteRadius"
@@ -143,14 +360,12 @@ async function submitRecommendation() {
           @prev="backToSearch"
           @next="openBudgetStep"
         />
-
         <BudgetStep
           v-else-if="screen === 'budget'"
           v-model:budget-amount="budgetAmount"
           @prev="backToRadiusStep"
           @next="openLifestyleStep"
         />
-
         <LifestyleStep
           v-else
           v-model:selected-lifestyle-ids="selectedLifestyleIds"
@@ -162,5 +377,6 @@ async function submitRecommendation() {
         />
       </section>
     </template>
+
   </main>
 </template>

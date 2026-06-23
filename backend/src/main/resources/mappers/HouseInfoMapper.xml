@@ -66,7 +66,15 @@
         LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
         <where>
             <if test="sigunguCode != null and sigunguCode.trim() != ''">
-                AND hi.sgg_cd = #{sigunguCode}
+                <!-- 10자리(법정동코드 전체)면 동 단위 정확 매칭, 5자리면 시군구 단위 매칭 -->
+                <choose>
+                    <when test="sigunguCode.trim().length() == 10">
+                        AND CONCAT(hi.sgg_cd, hi.umd_cd) = #{sigunguCode}
+                    </when>
+                    <otherwise>
+                        AND hi.sgg_cd = #{sigunguCode}
+                    </otherwise>
+                </choose>
             </if>
             <if test="dongName != null and dongName.trim() != ''">
                 AND hi.umd_nm LIKE CONCAT('%', #{dongName}, '%')

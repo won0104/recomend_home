@@ -46,12 +46,7 @@ function lifestyleRank(id) {
         <h2>중요한 생활환경을 순서대로 선택해주세요.</h2>
         <p>선택한 순서가 우선순위가 되며, 최대 3개까지 선택할 수 있어요.</p>
       </div>
-
-      <div class="ai-helper-box">
-        선택이 어렵다면<br />
-        <strong>AI에게 한 문장으로 물어보기 ✨</strong>
-      </div>
-
+      
       <div class="priority-box">
         <strong>선택 현황</strong>
         <p v-if="rankedLifestyleOptions.length === 0" class="priority-empty">아직 선택한 항목이 없습니다.</p>
@@ -82,15 +77,6 @@ function lifestyleRank(id) {
           <span class="lifestyle-icon" aria-hidden="true">{{ option.icon }}</span>
           <strong>{{ option.title }}</strong>
         </button>
-      </div>
-
-      <div class="lifestyle-question">
-        <strong>공원·산책에서 무엇이 더 중요한가요?</strong>
-        <div class="lifestyle-mood-options" role="group" aria-label="공원 산책 세부 선호">
-          <button type="button" :class="{ 'is-selected': lifestyleMood === 'green' }" @click="emit('update:lifestyleMood', 'green')">자연풍경 공원</button>
-          <button type="button" :class="{ 'is-selected': lifestyleMood === 'quiet' }" @click="emit('update:lifestyleMood', 'quiet')">조용히 걷는 동네</button>
-          <button type="button" :class="{ 'is-selected': lifestyleMood === 'activity' }" @click="emit('update:lifestyleMood', 'activity')">규모가 큰 공원</button>
-        </div>
       </div>
 
       <!-- 부모 View가 모든 조건을 모아 최종 추천 API를 호출할 수 있게 submit 이벤트만 올립니다. -->

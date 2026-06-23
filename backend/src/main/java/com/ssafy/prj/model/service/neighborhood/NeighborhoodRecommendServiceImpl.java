@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendRequest;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendResponse;
+import com.ssafy.prj.model.dto.neighborhood.CategoryScore;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodCommercialCount;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodParkCount;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodSchoolCount;
@@ -85,9 +86,16 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
 
         // 4. 점수 결과에는 코드만 있으므로, dongcodes에서 사람이 읽을 수 있는 지역명을 보강한다.
         enrichNeighborhoodNames(recommendations);
+        // 5. 카테고리별 점수 내역을 각 추천 결과에 추가해 프론트에서 바로 사용할 수 있게 한다.
+        enrichCategoryScores(
+            recommendations,
+            recommendationResult.scoresByCategory(),
+            recommendationResult.priorityWeights(),
+            priorities
+        );
         response.setRecommendations(recommendations);
 
-        // 5. 화면 개발 중 즉시 확인할 수 있도록 최종 3개를 서버 실행 콘솔에 출력한다.
+        // 6. 화면 개발 중 즉시 확인할 수 있도록 최종 3개를 서버 실행 콘솔에 출력한다.
         printRecommendations(
             recommendations,
             recommendationResult.scoresByCategory(),
@@ -159,6 +167,27 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             recommendation.setSidoName(nameSource.getSidoName());
             recommendation.setSigunguName(nameSource.getSigunguName());
             recommendation.setDongName(nameSource.getDongName());
+        }
+    }
+
+    /** 카테고리별 점수 내역을 각 추천 결과 객체에 채워 프론트에서 바로 사용할 수 있게 한다. */
+    private void enrichCategoryScores(
+        List<RecommendedNeighborhood> recommendations,
+        Map<SurveyCategory, Map<String, Double>> scoresByCategory,
+        List<Double> priorityWeights,
+        List<SurveyCategory> priorities
+    ) {
+        for (RecommendedNeighborhood recommendation : recommendations) {
+            String dongCode = recommendation.getLawdCd();
+            List<CategoryScore> scores = new java.util.ArrayList<>();
+            for (int i = 0; i < priorities.size(); i++) {
+                SurveyCategory category = priorities.get(i);
+                double score = scoresByCategory.getOrDefault(category, Map.of())
+                    .getOrDefault(dongCode, 0.0);
+                double weight = priorityWeights.get(i);
+                scores.add(new CategoryScore(category.name(), score, weight, score * weight));
+            }
+            recommendation.setCategoryScores(scores);
         }
     }
 
