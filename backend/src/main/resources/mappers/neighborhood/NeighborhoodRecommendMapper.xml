@@ -100,11 +100,8 @@
                         WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
                         GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
                         HAVING COUNT(price_hr.rent_id) >= 5
-                        <if test="request.depositMin != null or request.depositMax != null">
+                        <if test="request.depositMax != null">
                             AND SUM(CASE WHEN 1 = 1
-                                <if test="request.depositMin != null">
-                                    AND price_hr.deposit &gt;= #{request.depositMin}
-                                </if>
                                 <if test="request.depositMax != null">
                                     AND price_hr.deposit &lt;= #{request.depositMax}
                                 </if>
@@ -121,16 +118,10 @@
                         WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
                         GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
                         HAVING COUNT(price_hr.rent_id) >= 5
-                        <if test="request.depositMin != null or request.depositMax != null or request.monthlyRentMin != null or request.monthlyRentMax != null">
+                        <if test="request.depositMax != null or request.monthlyRentMax != null">
                             AND SUM(CASE WHEN 1 = 1
-                                <if test="request.depositMin != null">
-                                    AND price_hr.deposit &gt;= #{request.depositMin}
-                                </if>
                                 <if test="request.depositMax != null">
                                     AND price_hr.deposit &lt;= #{request.depositMax}
-                                </if>
-                                <if test="request.monthlyRentMin != null">
-                                    AND price_hr.monthly_rent &gt;= #{request.monthlyRentMin}
                                 </if>
                                 <if test="request.monthlyRentMax != null">
                                     AND price_hr.monthly_rent &lt;= #{request.monthlyRentMax}
@@ -147,11 +138,8 @@
                         WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
                         GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
                         HAVING COUNT(price_hd.no) >= 5
-                        <if test="request.dealAmountMin != null or request.dealAmountMax != null">
+                        <if test="request.dealAmountMax != null">
                             AND SUM(CASE WHEN 1 = 1
-                                <if test="request.dealAmountMin != null">
-                                    AND CAST(REPLACE(COALESCE(price_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{request.dealAmountMin}
-                                </if>
                                 <if test="request.dealAmountMax != null">
                                     AND CAST(REPLACE(COALESCE(price_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{request.dealAmountMax}
                                 </if>

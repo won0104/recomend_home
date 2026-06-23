@@ -36,7 +36,6 @@ public class HouseInfoApiController {
     public ResponseEntity<?> list(@Parameter(description = "법정동 코드", example = "11680") @RequestParam(required = false) String lawdCd,
                                   @Parameter(description = "동명", example = "개포동") @RequestParam(required = false) String dong,
                                   @Parameter(description = "아파트 검색어", example = "래미안") @RequestParam(required = false) String keyword,
-                                  @Parameter(description = "최대 거래가(만원)", example = "30000") @RequestParam(required = false) Integer maxPrice,
                                   @Parameter(description = "거래 유형", example = "매매") @RequestParam(required = false) String dealType,
                                   @Parameter(description = "주거 형태", example = "아파트") @RequestParam(required = false) String housingType,
                                   @Parameter(description = "매매가 최소(만원)") @RequestParam(required = false) Integer dealAmountMin,
@@ -46,7 +45,7 @@ public class HouseInfoApiController {
                                   @Parameter(description = "월세 최소(만원)") @RequestParam(required = false) Integer monthlyRentMin,
                                   @Parameter(description = "월세 최대(만원)") @RequestParam(required = false) Integer monthlyRentMax) throws Exception {
         return ResponseEntity.ok(ApiResponse.ok("주택 목록입니다.",
-                houseInfoService.search(lawdCd, dong, keyword, maxPrice, dealType, housingType,
+                houseInfoService.search(lawdCd, dong, keyword, dealType, housingType,
                         dealAmountMin, dealAmountMax, depositMin, depositMax, monthlyRentMin, monthlyRentMax)));
     }
 
@@ -59,12 +58,13 @@ public class HouseInfoApiController {
     }
 
     @GetMapping("/houses/{aptSeq}/deals")
-    @Operation(summary = "최근 주택 거래 내역", description = "공개 API입니다. 한 아파트의 최근 거래 내역을 반환합니다.")
+    @Operation(summary = "최근 주택 거래 내역", description = "공개 API입니다. 거래 유형에 따라 매매, 전세 또는 월세의 최근 계약 내역을 반환합니다.")
     public ResponseEntity<?> recentDeals(@Parameter(description = "아파트 식별값", example = "11680-1001") @PathVariable String aptSeq,
+                                         @Parameter(description = "거래 유형", example = "전세") @RequestParam(required = false) String dealType,
                                          @Parameter(description = "최대 조회 건수", example = "20") @RequestParam(required = false) Integer limit) throws Exception {
         int resolvedLimit = limit == null ? RECENT_DEALS_LIMIT : limit;
         return ResponseEntity.ok(ApiResponse.ok("최근 거래 내역입니다.",
-                houseInfoService.findRecentDeals(aptSeq, resolvedLimit)));
+                houseInfoService.findRecentDeals(aptSeq, dealType, resolvedLimit)));
     }
 
     @PutMapping("/admin/houses/{aptSeq}")

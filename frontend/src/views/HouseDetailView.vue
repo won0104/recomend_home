@@ -11,6 +11,8 @@ const route = useRoute()
 const house = ref(null)
 const deals = ref([])
 const sort = ref('latest')
+// 추천 결과 링크가 전달한 거래 유형이다. 일반 주택 목록에서 온 상세는 매매를 기본으로 사용한다.
+const dealType = computed(() => ['매매', '전세', '월세'].includes(route.query.dealType) ? route.query.dealType : '매매')
 
 const roadAddress = computed(() => {
   const h = house.value || {}
@@ -33,10 +35,19 @@ const houseMarker = computed(() => {
 async function load() {
   const [houseResponse, dealResponse] = await Promise.all([
     fetchHouse(route.params.aptSeq),
-    fetchHouseDeals(route.params.aptSeq)
+    fetchHouseDeals(route.params.aptSeq, dealType.value)
   ])
   house.value = houseResponse.data
   deals.value = Array.isArray(dealResponse.data) ? dealResponse.data : []
+}
+
+/** 전월세는 보증금과 월세를 함께 보여야 실제 계약 조건을 알 수 있다. */
+function transactionAmountText(deal) {
+  if (deal.contractType !== 'rent') return number(deal.amount)
+  const deposit = number(deal.deposit ?? deal.amount ?? 0)
+  return Number(deal.monthlyRent || 0) > 0
+    ? `보증금 ${deposit} / 월세 ${number(deal.monthlyRent)}`
+    : `전세 ${deposit}`
 }
 
 function copyCoords() {
@@ -95,17 +106,17 @@ onMounted(load)
 
     <div class="card">
       <div class="card-header section-head">
-        <div class="title"><span class="bar"></span>최근 거래 내역 <span class="badge text-bg-secondary">총 {{ deals.length }}건</span></div>
+        <div class="title"><span class="bar"></span>최근 {{ dealType }} 거래 내역 <span class="badge text-bg-secondary">총 {{ deals.length }}건</span></div>
         <select v-model="sort" class="form-select form-select-sm sort-select"><option value="latest">최신순</option><option value="price_desc">금액 높은순</option></select>
       </div>
       <table class="table table-hover">
-        <thead><tr><th>거래일</th><th class="text-end">면적 (㎡)</th><th class="text-end">금액 (만원)</th><th class="text-end">층</th><th>동</th></tr></thead>
+        <thead><tr><th>거래일</th><th class="text-end">면적 (㎡)</th><th class="text-end">거래 조건 (만원)</th><th class="text-end">층</th><th>동</th></tr></thead>
         <tbody>
           <tr v-if="sortedDeals.length === 0"><td colspan="5" class="empty-state">거래 내역이 없습니다.</td></tr>
           <tr v-for="deal in sortedDeals" :key="`${deal.date}-${deal.amount}-${deal.floor}`">
             <td class="mono">{{ deal.date }}</td>
             <td class="text-end mono">{{ Number(deal.area).toFixed(2) }}</td>
-            <td class="text-end"><span class="money">{{ number(deal.amount) }}</span></td>
+            <td class="text-end"><span class="money money--rent">{{ transactionAmountText(deal) }}</span></td>
             <td class="text-end mono">{{ deal.floor }}F</td>
             <td class="small text-muted">{{ deal.dong }}</td>
           </tr>

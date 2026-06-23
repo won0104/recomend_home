@@ -44,7 +44,7 @@ class NeighborhoodRecommendMapperIntegrationTest {
                     .as("%s 후보 동 조회 결과", dealType)
                     .isNotNull();
 
-            assertThat(houseInfoMapper.search("11110", null, null, null, dealType, "아파트",
+            assertThat(houseInfoMapper.search("11110", null, null, dealType, "아파트",
                     0, 100_000, 0, 100_000, 0, 1_000))
                     .as("%s 상세 매물 조회 결과", dealType)
                     .isNotNull();

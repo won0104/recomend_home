@@ -17,7 +17,6 @@ public interface HouseInfoMapper {
     List<HouseInfo> search(@Param("sigunguCode") String sigunguCode,
             @Param("dongName") String dongName,
             @Param("keyword") String keyword,
-            @Param("maxPrice") Integer maxPrice,
             @Param("dealType") String dealType,
             @Param("housingType") String housingType,
             @Param("dealAmountMin") Integer dealAmountMin,
@@ -31,5 +30,6 @@ public interface HouseInfoMapper {
 
     int update(HouseInfo houseInfo);
 
-    List<RealEstateTransaction> findRecentDealsByAptSeq(@Param("aptSeq") String aptSeq, @Param("limit") int limit);
+    List<RealEstateTransaction> findRecentDealsByAptSeq(@Param("aptSeq") String aptSeq,
+            @Param("dealType") String dealType, @Param("limit") int limit);
 }

@@ -653,6 +653,16 @@ main.container, .page-container {
   font-weight: 600;
   color: var(--text);
 }
+/*
+  매매가는 숫자만 표시되므로 .money의 고정폭 숫자 폰트를 유지한다.
+  반면 전월세는 "보증금 / 월세"처럼 한글과 숫자를 한 줄에 섞는다. JetBrains Mono 같은
+  숫자 중심 폰트에는 한글 글리프가 없어 브라우저가 일부 문자만 다른 폰트로 대체할 수 있으므로,
+  전월세 행은 본문 한글 폰트를 사용하면서 숫자 폭만 일정하게 유지한다.
+*/
+.money--rent {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
 .money .unit { font-size: 11px; color: var(--text-muted); margin-left: 2px; font-weight: 500; }
 
 /* Map placeholder */
@@ -1309,17 +1319,17 @@ dl.row dd {
 .condition-stepper {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 18px;
   margin: 0 auto 26px;
-  max-width: 620px;
+  max-width: 760px;
 }
 .condition-stepper::before {
   content: "";
   position: absolute;
   top: 18px;
-  left: 16%;
-  right: 16%;
+  left: 12.5%;
+  right: 12.5%;
   height: 2px;
   background: var(--border);
 }
@@ -1393,7 +1403,7 @@ dl.row dd {
   border-radius: 8px;
   background: #eef8f4;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.75;
 }
 .selected-origin {

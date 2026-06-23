@@ -23,6 +23,7 @@ import com.ssafy.prj.model.mapper.neighborhood.NeighborhoodRecommendMapper;
 import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
 import com.ssafy.prj.model.mapper.neighborhood.ParkMapper;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
+import com.ssafy.prj.model.service.neighborhood.score.CategoryScoreCalculator;
 
 /**
  * 프론트 추천 API가 사용하는 조립 서비스의 흐름을 검증한다.
@@ -36,8 +37,9 @@ class NeighborhoodRecommendServiceImplTest {
     @Mock
     private NeighborhoodRecommendMapper neighborhoodRecommendMapper;
 
-    @Mock
-    private NeighborhoodRecommendationService neighborhoodRecommendationService;
+    @Mock private CategoryScoreCalculator cafeScoreCalculator;
+    @Mock private CategoryScoreCalculator parkScoreCalculator;
+    @Mock private CategoryScoreCalculator petScoreCalculator;
 
     /** 최종 로그에 학교 원천 개수를 표시하기 위한 Mapper다. */
     @Mock
@@ -57,7 +59,7 @@ class NeighborhoodRecommendServiceImplTest {
     void setUp() {
         recommendService = new NeighborhoodRecommendServiceImpl(
             neighborhoodRecommendMapper,
-            neighborhoodRecommendationService,
+            List.of(cafeScoreCalculator, parkScoreCalculator, petScoreCalculator),
             schoolMapper,
             parkMapper,
             commercialMetricMapper
@@ -71,23 +73,16 @@ class NeighborhoodRecommendServiceImplTest {
         when(neighborhoodRecommendMapper.findLegalDongCodes(any()))
             .thenReturn(candidateDongCodes);
 
-        // 2. 실제 점수 계산 서비스가 이미 순위와 점수를 만든 결과를 준비한다.
-        when(neighborhoodRecommendationService.recommendWithDetails(
-            candidateDongCodes,
-            List.of(SurveyCategory.CAFE, SurveyCategory.PARK, SurveyCategory.PET)
-        )).thenReturn(new NeighborhoodRecommendationResult(
-            List.of(
-                scoredNeighborhood(1, "1111010200", 88.0),
-                scoredNeighborhood(2, "1111010100", 80.0),
-                scoredNeighborhood(3, "1111010300", 72.0)
-            ),
-            Map.of(
-                SurveyCategory.CAFE, Map.of("1111010200", 90.0),
-                SurveyCategory.PARK, Map.of("1111010200", 80.0),
-                SurveyCategory.PET, Map.of("1111010200", 95.0)
-            ),
-            List.of(0.5, 0.3, 0.2)
-        ));
+        // 2. 서비스 안으로 합쳐진 Calculator 점수 수집·가중치 합산을 검증하기 위해 카테고리별 점수를 고정한다.
+        when(cafeScoreCalculator.category()).thenReturn(SurveyCategory.CAFE);
+        when(parkScoreCalculator.category()).thenReturn(SurveyCategory.PARK);
+        when(petScoreCalculator.category()).thenReturn(SurveyCategory.PET);
+        when(cafeScoreCalculator.calculateScores(candidateDongCodes)).thenReturn(Map.of(
+            "1111010100", 80.0, "1111010200", 90.0, "1111010300", 70.0));
+        when(parkScoreCalculator.calculateScores(candidateDongCodes)).thenReturn(Map.of(
+            "1111010100", 80.0, "1111010200", 80.0, "1111010300", 80.0));
+        when(petScoreCalculator.calculateScores(candidateDongCodes)).thenReturn(Map.of(
+            "1111010100", 80.0, "1111010200", 95.0, "1111010300", 65.0));
 
         // 3. 코드별 지역명은 dongcodes에서 별도로 읽어 점수 결과에 보강한다.
         when(neighborhoodRecommendMapper.findNeighborhoodsByDongCodes(anyList())).thenReturn(List.of(
@@ -110,7 +105,7 @@ class NeighborhoodRecommendServiceImplTest {
         assertThat(response.getRecommendations()).extracting(RecommendedNeighborhood::getScore)
             .containsExactly(88.0, 80.0, 72.0);
 
-        // 이전 화면의 maxPrice 요청도 매매가 최대값으로 바꿔 후보 SQL에 전달한다.
+        // 새 요청의 매매가 최대값이 후보 SQL까지 그대로 전달되는지 확인한다.
         ArgumentCaptor<NeighborhoodRecommendRequest> requestCaptor = ArgumentCaptor.forClass(
             NeighborhoodRecommendRequest.class
         );
@@ -124,7 +119,7 @@ class NeighborhoodRecommendServiceImplTest {
         request.setLatitude(37.5665);
         request.setLongitude(126.9780);
         request.setRadiusKm(10.0);
-        request.setMaxPrice(30000);
+        request.setDealAmountMax(30000);
         request.setPriorities(priorities);
         return request;
     }

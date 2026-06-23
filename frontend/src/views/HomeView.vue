@@ -100,7 +100,9 @@ async function runSearch() {
   }
 }
 
-// 첫 화면의 카드에는 전체 거래 통계만 표시한다. 상세 목록과 지도는 사용자가 검색할 때만 불러온다.
+// 상단 카드만 단독으로 갱신해야 하는 화면에서 사용하는 보조 함수다.
+// 현재 홈 화면은 최초 진입 때 runSearch()를 호출하므로, 일반적인 첫 화면 흐름에서는
+// 목록·지도·상단 통계를 한 번에 갱신한다.
 async function loadInitialSummary() {
   try {
     const response = await api.get('/properties/summary')
@@ -181,7 +183,15 @@ function resetFilters() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSidoOptions(), loadFavorites(), loadInitialSummary()])
+  // 1. 기본 지역(서울특별시 → 종로구)을 먼저 정한다.
+  //    loadSidoOptions() 내부에서 기본 법정동 코드도 설정하므로, 이를 기다리지 않고
+  //    검색하면 지역 코드가 비어 있는 전체 검색이 실행될 수 있다.
+  await loadSidoOptions()
+
+  // 2. 지역 기본값이 준비된 뒤 관심지역과 실제 거래 검색을 동시에 시작한다.
+  //    runSearch()는 /properties/search(목록·지도)와 /properties/summary(상단 카드)를
+  //    함께 호출하므로, 새로고침 직후에도 종로구의 매매·전월세 데이터가 화면에 표시된다.
+  await Promise.all([loadFavorites(), runSearch()])
 })
 </script>
 
@@ -307,7 +317,10 @@ onMounted(async () => {
         <div class="card">
           <div class="card-header section-head">
             <div class="title"><span class="bar"></span><span>검색 결과</span>
-              <span class="badge text-bg-primary">{{ results.length }}건</span>
+              <!--
+                results는 화면 렌더링 보호를 위해 API가 최대 1,000건만 내려준다.
+              -->
+              <span class="badge text-bg-primary">{{ number(stats.totalCount) }}건</span>
             </div>
           </div>
           <div class="filter-rail">
@@ -348,7 +361,16 @@ onMounted(async () => {
                   <td>{{ item.aptNm || item.houseName || item.name }}</td>
                   <td>{{ item.dong || item.umdNm }}</td>
                   <td class="text-end mono">{{ item.area }}</td>
-                  <td class="text-end"><span class="money">{{ transactionAmountText(item) }}</span></td>
+                  <!--
+                    매매 금액은 숫자만 있어 고정폭 숫자 폰트가 잘 맞는다.
+                    전월세 금액은 "보증금 / 월세"처럼 한글이 함께 들어가므로,
+                    한글 글리프가 없는 고정폭 폰트의 대체 렌더링을 피하기 위해 별도 스타일을 적용한다.
+                  -->
+                  <td class="text-end">
+                    <span class="money" :class="{ 'money--rent': item.contractType === 'rent' }">
+                      {{ transactionAmountText(item) }}
+                    </span>
+                  </td>
                   <td class="text-end mono">{{ item.floor }}</td>
                 </tr>
               </tbody>

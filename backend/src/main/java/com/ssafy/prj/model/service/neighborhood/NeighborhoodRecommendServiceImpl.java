@@ -1,6 +1,7 @@
 package com.ssafy.prj.model.service.neighborhood;
 
 import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +22,7 @@ import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
 import com.ssafy.prj.model.mapper.neighborhood.NeighborhoodRecommendMapper;
 import com.ssafy.prj.model.mapper.neighborhood.ParkMapper;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
+import com.ssafy.prj.model.service.neighborhood.score.CategoryScoreCalculator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,7 +32,7 @@ import lombok.RequiredArgsConstructor;
  * <h2>처리 순서</h2>
  * <ol>
  *   <li>출발 위치·반경·예산으로 후보 법정동을 먼저 찾는다.</li>
- *   <li>프론트가 보낸 우선순위 문자열을 {@link SurveyCategory} enum으로 안전하게 변환한다.</li>
+ *   <li>프론트가 보낸 우선순위 문자열을 {@link SurveyCategory} enum으로 변환한다.</li>
  *   <li>학교·공원·상권 Calculator가 후보 동의 점수를 계산해 상위 3개를 고른다.</li>
  *   <li>선정된 코드에 dongcodes의 지역명을 붙여 프론트에 반환하고 서버 콘솔에도 출력한다.</li>
  * </ol>
@@ -42,8 +44,14 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendService {
 
+    /** 1·2·3순위 생활 조건의 점수 반영 비율이다. */
+    private static final List<Double> PRIORITY_WEIGHTS = List.of(0.5, 0.3, 0.2);
+    /** 화면에는 최종 상위 세 동네만 보여준다. */
+    private static final int RECOMMENDATION_LIMIT = 3;
+
     private final NeighborhoodRecommendMapper neighborhoodRecommendMapper;
-    private final NeighborhoodRecommendationService neighborhoodRecommendationService;
+    /** 학교·공원·상권 등 카테고리별 원천 점수를 계산하는 구현체 목록이다. */
+    private final List<CategoryScoreCalculator> scoreCalculators;
     private final SchoolMapper schoolMapper;
     private final ParkMapper parkMapper;
     private final CommercialMetricMapper commercialMetricMapper;
@@ -52,7 +60,6 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
     @Transactional(readOnly = true)
     public NeighborhoodRecommendResponse recommend(NeighborhoodRecommendRequest request) {
         validate(request);
-        normalizeLegacyBudget(request);
 
         // 1. 주거 조건으로 먼저 후보 법정동 목록을 좁힌다.
         List<String> legalDongCodes = neighborhoodRecommendMapper.findLegalDongCodes(request);
@@ -74,7 +81,7 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         }
 
         // 3. 선택 순서(1·2·3순위)를 반영해 상위 3개 동 코드와 점수를 계산한다.
-        NeighborhoodRecommendationResult recommendationResult = neighborhoodRecommendationService.recommendWithDetails(
+        NeighborhoodRecommendationResult recommendationResult = recommendWithDetails(
             legalDongCodes,
             priorities
         );
@@ -99,6 +106,59 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             priorities
         );
         return response;
+    }
+
+    /**
+     * 후보 동의 카테고리 점수를 합산해 추천 결과와 점수 설명 데이터를 함께 만든다.
+     *
+     * <p>후보 조회·점수 합산·응답 조립은 하나의 추천 요청 흐름이므로 이 서비스 안에서 순서대로 처리한다.</p>
+     */
+    private NeighborhoodRecommendationResult recommendWithDetails(
+        List<String> dongCodes,
+        List<SurveyCategory> priorities
+    ) {
+        Map<SurveyCategory, Map<String, Double>> scoresByCategory = new EnumMap<>(SurveyCategory.class);
+        for (SurveyCategory category : priorities) {
+            scoresByCategory.put(category, getCategoryScores(category, dongCodes));
+        }
+
+        Map<String, Double> totalScores = new LinkedHashMap<>();
+        for (String dongCode : dongCodes) {
+            double totalScore = 0.0;
+            for (int index = 0; index < priorities.size(); index++) {
+                SurveyCategory category = priorities.get(index);
+                double categoryScore = scoresByCategory.get(category).getOrDefault(dongCode, 0.0);
+                totalScore += categoryScore * PRIORITY_WEIGHTS.get(index);
+            }
+            totalScores.put(dongCode, totalScore);
+        }
+
+        List<Map.Entry<String, Double>> sortedScores = totalScores.entrySet().stream()
+            .sorted(Map.Entry.<String, Double>comparingByValue(java.util.Comparator.reverseOrder())
+                .thenComparing(Map.Entry.comparingByKey()))
+            .limit(RECOMMENDATION_LIMIT)
+            .toList();
+        List<RecommendedNeighborhood> recommendations = java.util.stream.IntStream.range(0, sortedScores.size())
+            .mapToObj(index -> {
+                Map.Entry<String, Double> score = sortedScores.get(index);
+                RecommendedNeighborhood recommendation = new RecommendedNeighborhood();
+                recommendation.setLawdCd(score.getKey());
+                recommendation.setRank(index + 1);
+                recommendation.setScore(score.getValue());
+                return recommendation;
+            })
+            .toList();
+
+        return new NeighborhoodRecommendationResult(recommendations, scoresByCategory, PRIORITY_WEIGHTS);
+    }
+
+    /** 선택한 카테고리를 담당하는 Calculator를 찾아, 후보 동별 상대 점수를 계산한다. */
+    private Map<String, Double> getCategoryScores(SurveyCategory category, List<String> dongCodes) {
+        return scoreCalculators.stream()
+            .filter(calculator -> calculator.category() == category)
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 카테고리입니다: " + category))
+            .calculateScores(dongCodes);
     }
 
     /**
@@ -364,45 +424,15 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         if (request.getRadiusKm() == null || request.getRadiusKm() <= 0) {
             throw new IllegalArgumentException("반경 범위는 0보다 커야 합니다.");
         }
-        validatePositiveBudget("매매가 최소", request.getDealAmountMin());
         validatePositiveBudget("매매가 최대", request.getDealAmountMax());
-        validatePositiveBudget("보증금 최소", request.getDepositMin());
         validatePositiveBudget("보증금 최대", request.getDepositMax());
-        validatePositiveBudget("월세 최소", request.getMonthlyRentMin());
         validatePositiveBudget("월세 최대", request.getMonthlyRentMax());
-        validatePositiveBudget("예산", request.getMaxPrice());
-        validateRange("매매가", request.getDealAmountMin(), request.getDealAmountMax());
-        validateRange("보증금", request.getDepositMin(), request.getDepositMax());
-        validateRange("월세", request.getMonthlyRentMin(), request.getMonthlyRentMax());
 
         String dealType = request.getDealType() == null ? "매매" : request.getDealType().trim();
         if (!List.of("매매", "전세", "월세").contains(dealType)) {
             throw new IllegalArgumentException("거래 유형은 매매, 전세, 월세 중 하나여야 합니다.");
         }
         request.setDealType(dealType);
-    }
-
-    /**
-     * 이전 화면은 maxPrice 하나만 보냈다. 새 클라이언트는 거래 유형에 맞는 금액 필드를 보내며,
-     * 구 클라이언트는 선택한 거래 유형에 따라 maxPrice를 매매가 또는 보증금 최대값으로 해석한다.
-     */
-    private void normalizeLegacyBudget(NeighborhoodRecommendRequest request) {
-        if (request.getMaxPrice() == null) {
-            return;
-        }
-        switch (request.getDealType()) {
-            case "매매" -> {
-                if (request.getDealAmountMax() == null) {
-                    request.setDealAmountMax(request.getMaxPrice());
-                }
-            }
-            case "전세", "월세" -> {
-                if (request.getDepositMax() == null) {
-                    request.setDepositMax(request.getMaxPrice());
-                }
-            }
-            default -> throw new IllegalStateException("검증되지 않은 거래 유형입니다.");
-        }
     }
 
     private void validatePositiveBudget(String label, Integer value) {
