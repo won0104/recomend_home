@@ -23,7 +23,7 @@ function clearOverlays() {
 
 function makeDot(house, highlighted) {
   const color = highlighted ? '#079455' : '#6b7280'
-  const size = highlighted ? '12px' : '8px'
+  const size = highlighted ? '18px' : '14px'
   const el = document.createElement('div')
   el.style.cssText = `
     width:${size};height:${size};border-radius:50%;
@@ -94,13 +94,13 @@ watch(() => props.highlightedAptSeq, (next, prev) => {
   // 이전 하이라이트 해제
   if (prev && overlayMap[prev]) {
     const el = overlayMap[prev].el
-    el.style.width = '8px'; el.style.height = '8px'
+    el.style.width = '14px'; el.style.height = '14px'
     el.style.background = '#6b7280'
   }
   // 새 하이라이트 적용
   if (next && overlayMap[next]) {
     const el = overlayMap[next].el
-    el.style.width = '12px'; el.style.height = '12px'
+    el.style.width = '18px'; el.style.height = '18px'
     el.style.background = '#079455'
     // 지도 중심 이동
     const house = props.houses.find(h => h.aptSeq === next)

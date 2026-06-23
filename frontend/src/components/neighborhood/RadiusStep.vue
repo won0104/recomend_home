@@ -23,7 +23,7 @@ const radius = computed({
         <p>입력한 회사/학교 위치를 기준으로 원하는 반경 범위를 설정해 주세요.</p>
       </div>
       <div class="condition-tip">
-        전세거래 기준으로 계산됩니다.<br />
+        직선거리 기준으로 최대 30km까지 설정할 수 있습니다.<br />
         실제 이동 거리와 지도/교통 환경 차이가 있을 수 있어요.
       </div>
     </div>
@@ -47,16 +47,16 @@ const radius = computed({
         class="radius-slider"
         type="range"
         min="5"
-        max="50"
+        max="30"
         step="5"
         aria-label="최대 반경 거리"
       />
-      <!-- 각 left% = (값 - min) / (max - min) * 100 -->
+      <!-- 각 left% = (값 - 5) / (30 - 5) * 100 -->
       <div class="radius-marks" aria-hidden="true">
         <span style="left: 0%">5km</span>
-        <span style="left: 22.2%">15km</span>
-        <span style="left: 55.6%">30km</span>
-        <span style="left: 100%">50km</span>
+        <span style="left: 20%">10km</span>
+        <span style="left: 60%">20km</span>
+        <span style="left: 100%">30km</span>
       </div>
     </div>
 

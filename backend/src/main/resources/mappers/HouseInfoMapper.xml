@@ -21,6 +21,7 @@
         <result column="sido_name" property="sidoName" />
         <result column="gugun_name" property="gugunName" />
         <result column="deal_count" property="dealCount" />
+        <result column="avg_price" property="avgPrice" />
     </resultMap>
 
     <resultMap id="recentDealMap" type="RealEstateTransaction">
@@ -56,7 +57,9 @@
         hi.longitude,
         dc.sido_name,
         dc.gugun_name,
-        (SELECT COUNT(*) FROM housedeals hd WHERE hd.apt_seq = hi.apt_seq) AS deal_count
+        (SELECT COUNT(*) FROM housedeals hd WHERE hd.apt_seq = hi.apt_seq) AS deal_count,
+        (SELECT CAST(AVG(CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED)) AS SIGNED)
+         FROM housedeals hd2 WHERE hd2.apt_seq = hi.apt_seq) AS avg_price
     </sql>
 
     <select id="search" resultMap="houseInfoMap">

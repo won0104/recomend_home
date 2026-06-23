@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { defaultCenter, loadKakaoMap } from '../../utils/kakaoMap'
 
 const emit = defineEmits(['select-place', 'next'])
@@ -18,54 +18,48 @@ const mapEl = ref(null)
 let kakaoMap = null
 let placeService = null
 let paginationRef = null
-let infoWindow = null
-let markers = []
-
-const selectedPlaceTitle = computed(() => selectedPlace.value?.place_name || '')
-const selectedPlaceAddress = computed(() => selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || '')
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
+let overlays = [] // { overlay, el, place }
 
 function clearMarkers() {
-  markers.forEach((marker) => marker.setMap(null))
-  markers = []
-  infoWindow?.close()
+  overlays.forEach(({ overlay }) => overlay.setMap(null))
+  overlays = []
 }
 
-function markerImage(index) {
-  const imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_number_blue.png'
-  const imageSize = new window.kakao.maps.Size(36, 37)
-  const imageOptions = {
-    spriteSize: new window.kakao.maps.Size(36, 691),
-    spriteOrigin: new window.kakao.maps.Point(0, index * 46 + 10),
-    offset: new window.kakao.maps.Point(13, 37)
-  }
-  return new window.kakao.maps.MarkerImage(imageSrc, imageSize, imageOptions)
-}
-
-function openInfoWindow(marker, place) {
-  const content = `<div style="padding:6px 9px;z-index:1;font-size:13px;font-weight:700;">${escapeHtml(place.place_name)}</div>`
-  infoWindow.setContent(content)
-  infoWindow.open(kakaoMap, marker)
+function makeMarkerEl(index, place) {
+  const el = document.createElement('div')
+  el.style.cssText = [
+    'width:30px;height:30px;border-radius:50%;',
+    'background:#079455;color:#fff;font-weight:800;font-size:13px;',
+    'display:flex;align-items:center;justify-content:center;',
+    'border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.28);',
+    'cursor:pointer;transition:transform .15s,background .15s;user-select:none;',
+  ].join('')
+  el.textContent = index + 1
+  el.addEventListener('click', () => selectPlace(place, index))
+  el.addEventListener('mouseenter', () => { if (!el.dataset.selected) el.style.transform = 'scale(1.2)' })
+  el.addEventListener('mouseleave', () => { if (!el.dataset.selected) el.style.transform = '' })
+  return el
 }
 
 function selectPlace(place, index) {
-  const marker = markers[index]
+  // 이전 선택 마커 초기화
+  overlays.forEach(({ el }) => {
+    el.style.background = 'rgb(7 148 85 / 0.5)'
+    el.style.transform = ''
+    el.style.boxShadow = '0 2px 6px rgba(0,0,0,.28)'
+    delete el.dataset.selected
+  })
+  // 선택된 마커 강조
+  const target = overlays[index]
+  if (target) {
+    target.el.style.background = '#046c3b'
+    target.el.style.transform = 'scale(1.18)'
+    target.el.style.boxShadow = '0 3px 10px rgba(4,108,59,.5)'
+    target.el.dataset.selected = 'true'
+    kakaoMap.panTo(new window.kakao.maps.LatLng(Number(place.y), Number(place.x)))
+  }
   selectedPlace.value = place
   emit('select-place', place)
-
-  // 선택한 후보를 지도 중심으로 옮겨 사용자가 다음 단계의 기준 위치를 명확히 확인하게 합니다.
-  if (marker) {
-    kakaoMap.panTo(marker.getPosition())
-    openInfoWindow(marker, place)
-  }
 }
 
 function renderPlaces(items) {
@@ -77,18 +71,15 @@ function renderPlaces(items) {
   const bounds = new window.kakao.maps.LatLngBounds()
   items.forEach((place, index) => {
     const position = new window.kakao.maps.LatLng(Number(place.y), Number(place.x))
-    const marker = new window.kakao.maps.Marker({
-      map: kakaoMap,
-      position,
-      image: markerImage(index)
+    const el = makeMarkerEl(index, place)
+    const overlay = new window.kakao.maps.CustomOverlay({
+      map: kakaoMap, position, content: el, yAnchor: 0.5, xAnchor: 0.5,
     })
-
-    window.kakao.maps.event.addListener(marker, 'click', () => selectPlace(place, index))
-    markers.push(marker)
+    overlays.push({ overlay, el, place })
     bounds.extend(position)
   })
 
-  if (markers.length) kakaoMap.setBounds(bounds)
+  if (overlays.length) kakaoMap.setBounds(bounds)
 }
 
 function renderPagination(pagination) {
@@ -166,7 +157,6 @@ async function initMap() {
       level: 3
     })
     placeService = new kakao.maps.services.Places()
-    infoWindow = new kakao.maps.InfoWindow({ zIndex: 1 })
   } catch {
     message.value = '카카오 지도 SDK를 불러오지 못했습니다.'
   }
@@ -196,7 +186,7 @@ initMap()
             placeholder="회사 또는 학교 주소, 건물명, 동네를 입력해 주세요"
           />
           <button class="btn btn-primary" type="submit" :disabled="loading">
-            {{ loading ? '검색 중' : '장소 검색' }}
+            {{ loading ? '검색 중' : '동네 찾기' }}
           </button>
         </div>
       </form>
@@ -244,17 +234,6 @@ initMap()
             </div>
           </li>
         </ol>
-
-        <div class="selected-place-box" :class="{ 'is-empty': !selectedPlace }">
-          <template v-if="selectedPlace">
-            <span class="small text-muted">선택한 기준 위치</span>
-            <strong>{{ selectedPlaceTitle }}</strong>
-            <small>{{ selectedPlaceAddress }}</small>
-          </template>
-          <template v-else>
-            <span class="small text-muted">지도 또는 목록에서 기준 위치를 선택해 주세요.</span>
-          </template>
-        </div>
 
         <nav v-if="pages.length > 1" class="place-pagination" aria-label="Kakao place result pages">
           <button

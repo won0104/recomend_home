@@ -1569,6 +1569,46 @@ dl.row dd {
   color: #079455;
   box-shadow: inset 0 0 0 1px #079455;
 }
+/* 주거 형태 아이콘 버튼 */
+.housing-options {
+  display: flex;
+  gap: 10px;
+}
+.housing-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 8px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.housing-option:hover {
+  background: var(--bg-soft);
+}
+.housing-option.is-selected {
+  border-color: #079455;
+  background: #ecfdf3;
+  box-shadow: inset 0 0 0 1px #079455;
+}
+.housing-option__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.housing-option__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.housing-option.is-selected .housing-option__label {
+  color: #079455;
+}
+
 .housing-select {
   width: 124px;
   height: 48px;
@@ -1589,6 +1629,7 @@ dl.row dd {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  padding: 20px 16px;
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.7;
@@ -1646,11 +1687,15 @@ dl.row dd {
   min-width: 0;
 }
 .lifestyle-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 14px;
+  padding: 16px 8px;
 }
 .lifestyle-option {
+  width: calc(25% - 10.5px);
+  min-width: 130px;
   position: relative;
   min-height: 118px;
   padding: 18px 14px 16px;
@@ -1961,7 +2006,9 @@ dl.row dd {
     align-items: flex-start;
     flex-direction: column;
   }
-  .lifestyle-grid,
+  .lifestyle-grid .lifestyle-option {
+    width: calc(50% - 7px);
+  }
   .lifestyle-mood-options,
   .lifestyle-actions,
   .recommend-result-grid {
@@ -1986,11 +2033,11 @@ dl.row dd {
 /* ── 동네 추천 결과 화면 (nr-*) ────────────────────────── */
 .nr-result-page {
   display: grid;
-  grid-template-columns: 1fr 420px;
-  gap: 32px;
-  max-width: 1200px;
+  grid-template-columns: 1fr 400px;
+  gap: 28px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 40px 24px 60px;
+  padding: 32px 32px 60px;
   align-items: start;
 }
 
@@ -2089,7 +2136,7 @@ dl.row dd {
   color: #fff;
   writing-mode: horizontal-tb;
 }
-.nr-card--rank1 .nr-card__rank { background: #079455; }
+.nr-card--rank1 .nr-card__rank { background: #2563EB; }
 .nr-card--rank2 .nr-card__rank { background: #22C55E; }
 .nr-card--rank3 .nr-card__rank { background: #F97316; }
 
@@ -2169,7 +2216,7 @@ dl.row dd {
   border: 3px solid currentColor;
   aspect-ratio: 1;
 }
-.nr-card__score-circle--rank1 { color: #079455; }
+.nr-card__score-circle--rank1 { color: #2563EB; }
 .nr-card__score-circle--rank2 { color: #22C55E; }
 .nr-card__score-circle--rank3 { color: #F97316; }
 .nr-card__score-num {
@@ -2210,19 +2257,17 @@ dl.row dd {
   color: #fff;
 }
 
-/* 오른쪽 지도 */
+/* 오른쪽 지도 — 뷰포트에 고정 */
 .nr-result-right {
   position: sticky;
-  top: 80px;
+  top: 70px;
+  height: calc(100vh - 100px);
 }
 .nr-result-map {
+  height: 100%;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0,0,0,.1);
-}
-.nr-map-wrap {
-  position: relative;
-  height: 480px;
 }
 .nr-map {
   width: 100%;
@@ -2261,7 +2306,7 @@ dl.row dd {
 .nr-detail-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 24px 60px;
+  padding: 16px 24px 40px;
 }
 
 /* 헤더 */
@@ -2269,7 +2314,7 @@ dl.row dd {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 28px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 .nr-back-btn {
@@ -2328,6 +2373,7 @@ dl.row dd {
   grid-template-columns: 380px 1fr;
   gap: 28px;
   align-items: start;
+  /* 왼쪽 컬럼은 페이지 스크롤, 오른쪽은 뷰포트에 고정 */
 }
 .nr-detail-section-title {
   font-size: 16px;
@@ -2392,25 +2438,26 @@ dl.row dd {
 
 .nr-detail-score-item__desc { font-size: 12px; color: var(--text-secondary, #777); margin: 0; }
 
-/* 오른쪽: 지도 + 매물 목록 */
+/* 오른쪽: 지도 + 매물 목록 — 뷰포트에 고정, 내부만 스크롤 */
 .nr-detail-right {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
+  position: sticky;
+  top: 70px;
+  height: calc(100vh - 120px);
+  overflow: hidden;
 }
 
 /* 지도 카드 */
 .nr-detail-map-card {
-  position: sticky;
-  top: 80px;
-  height: 340px;
   flex-shrink: 0;
+  height: 280px;
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,.06);
-  z-index: 1;
 }
 .nr-detail-mapbox {
   position: relative;
@@ -2422,13 +2469,18 @@ dl.row dd {
   height: 100%;
 }
 
-/* 매물 목록 카드 */
+/* 매물 목록 카드 — 남은 높이를 모두 차지하고 내부만 스크롤 */
 .nr-detail-house-card {
+  flex: 1;
+  min-height: 0;
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 16px;
-  padding: 24px;
+  padding: 20px 24px 0;
   box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .nr-detail-loading, .nr-detail-empty {
   text-align: center;
@@ -2437,15 +2489,115 @@ dl.row dd {
   font-size: 14px;
 }
 .nr-detail-house-table-wrap {
-  overflow-x: auto;
-  max-height: 480px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: auto;
+  padding-bottom: 16px;
 }
 .nr-detail-house-table { margin: 0; font-size: 14px; }
 .nr-detail-row--active td { background: #ecfdf3 !important; }
+.nr-detail-row--pinned td { background: rgba(7, 148, 85, 0.08) !important; }
+.nr-detail-row--pinned td:first-child { border-left: 3px solid #079455; }
 
 /* 반응형 */
 @media (max-width: 860px) {
   .nr-detail-body { grid-template-columns: 1fr; }
-  .nr-detail-map-card { position: static; height: 260px; }
+  .nr-detail-right { position: static; height: auto; overflow: visible; }
+  .nr-detail-map-card { height: 260px; }
+  .nr-detail-house-card { min-height: 300px; }
+  .nr-detail-house-table-wrap { max-height: 400px; }
 }
+
+/* ── 추천 로딩 화면 ─────────────────────────────────── */
+.nr-loading-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+.nr-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 48px 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.08);
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+}
+.nr-loading-spinner {
+  width: 52px;
+  height: 52px;
+  border: 4px solid var(--border);
+  border-top-color: #079455;
+  border-radius: 50%;
+  animation: nr-spin 0.9s linear infinite;
+}
+@keyframes nr-spin { to { transform: rotate(360deg); } }
+.nr-loading-stage {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+  min-height: 2.5em;
+  transition: opacity .3s;
+}
+.nr-loading-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.nr-loading-count-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: -8px 0 0;
+  line-height: 1.6;
+}
+.nr-loading-count-hint strong { color: #079455; font-weight: 700; }
+
+/* ── 후보 동 개수 안내 ──────────────────────────────── */
+.nr-candidate-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.nr-candidate-note strong { color: #079455; }
+
+/* 거래 유형 배지 */
+.nr-deal-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--primary-soft, #ecfdf3);
+  color: var(--primary, #079455);
+  white-space: nowrap;
+}
+
+/* ── 지도 크게 보기 버튼 ─────────────────────────────── */
+.nr-map-wrap { position: relative; height: 480px; }
+.nr-result-map .nr-map-wrap { height: 100%; }
+.nr-map-expand-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+  padding: 6px 14px;
+  background: rgba(255,255,255,.95);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  transition: background .15s;
+}
+.nr-map-expand-btn:hover { background: #fff; }

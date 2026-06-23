@@ -20,6 +20,7 @@ public class HouseInfo {
     private String sidoName;
     private String gugunName;
     private Integer dealCount;
+    private Long avgPrice;
 
     public HouseInfo() {
     }
@@ -71,4 +72,7 @@ public class HouseInfo {
 
     public Integer getDealCount() { return dealCount; }
     public void setDealCount(Integer dealCount) { this.dealCount = dealCount; }
+
+    public Long getAvgPrice() { return avgPrice; }
+    public void setAvgPrice(Long avgPrice) { this.avgPrice = avgPrice; }
 }

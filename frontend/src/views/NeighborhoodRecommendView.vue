@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import BudgetStep from '../components/neighborhood/BudgetStep.vue'
 import LifestyleStep from '../components/neighborhood/LifestyleStep.vue'
@@ -15,31 +15,58 @@ import { number } from '../utils/format'
 const selectedPlace = ref(null)
 const screen = ref('search')
 
-const commuteRadius = ref(30)
+const commuteRadius = ref(15)
 const budgetAmount = ref(3)
+const dealType = ref('매매')
+const housingType = ref('아파트')
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
 const recommendations = ref([])
+const totalCandidateCount = ref(0)
+const savedDealType = ref('매매') // 추천 요청 시점의 거래 유형 스냅샷
+
+// 로딩 단계 애니메이션
+const loadingStage = ref(0)
+const loadingMessages = [
+  '기준 위치 주변 동네를 탐색하는 중...',
+  '후보 동네의 생활 환경을 분석하는 중...',
+  '후보 동네 중 최적 3곳을 선정하는 중...',
+]
+let _loadingTimer = null
 
 // 상세 화면
 const selectedNeighborhood = ref(null)
 const houseList = ref([])
 const houseLoading = ref(false)
-const highlightedAptSeq = ref(null)
+const highlightedAptSeq = ref(null) // 행 hover
+const pinnedAptSeq = ref(null)      // 지도 핀 클릭으로 고정된 행
+
+// 지도에 전달할 하이라이트: 핀 고정이 있으면 핀 우선, 없으면 hover
+const mapHighlight = computed(() => pinnedAptSeq.value || highlightedAptSeq.value)
+
+function handleMapSelect(aptSeq) {
+  pinnedAptSeq.value = pinnedAptSeq.value === aptSeq ? null : aptSeq
+  if (pinnedAptSeq.value) {
+    nextTick(() => {
+      document.querySelector(`[data-apt-seq="${aptSeq}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+  }
+}
 
 const lifestyleOptions = [
   { id: 'CAFE',     icon: '☕', title: '카페·외식' },
-  { id: 'CULTURE',  icon: '⌁',  title: '운동·문화' },
+  { id: 'CULTURE',  icon: '🏃', title: '운동·여가' },
   { id: 'SHOPPING', icon: '🛒', title: '장보기·생활편의' },
   { id: 'SCHOOL',   icon: '🏫', title: '학교·교육' },
   { id: 'PARK',     icon: '🌳', title: '공원·산책' },
-  { id: 'MEDICAL',  icon: '⚕',  title: '의료' },
+  { id: 'MEDICAL',  icon: '🏥', title: '의료' },
   { id: 'PET',      icon: '🐾', title: '반려인' },
 ]
 
 const categoryLabel = {
-  CAFE: '카페·외식', CULTURE: '운동·문화', SHOPPING: '장보기·생활편의',
+  CAFE: '카페·외식', CULTURE: '운동·여가', SHOPPING: '장보기·생활편의',
   SCHOOL: '학교·교육', PARK: '공원·산책', MEDICAL: '의료', PET: '반려인',
 }
 
@@ -75,7 +102,7 @@ function getWeaknessTags(categoryScores) {
   return categoryScores.filter((cs) => cs.score < 40).map((cs) => weaknessLabel[cs.category] ?? cs.category)
 }
 
-const RANK_COLORS = { 1: '#079455', 2: '#22C55E', 3: '#F97316' }
+const RANK_COLORS = { 1: '#2563EB', 2: '#22C55E', 3: '#F97316' }
 
 const currentStep = computed(() => {
   if (screen.value === 'budget') return 2
@@ -121,6 +148,8 @@ async function openDetail(rec) {
   screen.value = 'detail'
   houseLoading.value = true
   houseList.value = []
+  pinnedAptSeq.value = null
+  highlightedAptSeq.value = null
   try {
     const res = await fetchHouses({ lawdCd: rec.lawdCd })
     houseList.value = Array.isArray(res.data) ? res.data : []
@@ -137,13 +166,20 @@ async function submitRecommendation() {
     return
   }
   recommendLoading.value = true
+  savedDealType.value = dealType.value
+  loadingStage.value = 0
+  _loadingTimer = setInterval(() => {
+    if (loadingStage.value < loadingMessages.length - 1) loadingStage.value++
+  }, 1800)
   try {
     const response = await recommendNeighborhood(recommendationCondition.value)
     recommendations.value = response?.data?.recommendations ?? []
+    totalCandidateCount.value = response?.data?.totalCount ?? 0
     screen.value = 'result'
   } catch (error) {
     console.error(error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.')
   } finally {
+    clearInterval(_loadingTimer)
     recommendLoading.value = false
   }
 }
@@ -157,6 +193,7 @@ async function submitRecommendation() {
       <section class="place-finder-hero">
         <div class="place-finder-badge">맞춤 동네 추천 서비스</div>
         <h1>나에게 딱 맞는<br /><span>완벽한 동네</span>를 찾아드립니다</h1>
+        <p>출퇴근 거리, 예산, 생활 성향까지 고려한<br />맞춤형 동네 추천으로 당신의 새로운 보금자리를 찾아보세요.</p>
       </section>
       <div class="place-finder-shell">
         <PlaceSearchStep @select-place="handlePlaceSelect" @next="openRadiusStep" />
@@ -170,9 +207,13 @@ async function submitRecommendation() {
           <p class="nr-result-eyebrow">동네 추천</p>
           <h2 class="nr-result-title">회원님의 조건에 맞는 <strong>추천 동네</strong>에요</h2>
           <div class="nr-conditions">
-            <span>기준 위치까지 직선거리 {{ commuteRadius }}km 이하</span>
+            <span>기준 위치까지 직선거리 {{ commuteRadius }}km 이내</span>
             <span class="nr-cond-sep">|</span>
             <span>예산 {{ budgetLabel }}</span>
+            <span class="nr-cond-sep">|</span>
+            <span>거래: {{ dealType }}</span>
+            <span class="nr-cond-sep">|</span>
+            <span>주거형태: {{ housingType }}</span>
           </div>
           <div class="nr-priorities">
             <span v-for="(label, i) in priorityLabels" :key="i" class="nr-priority-tag">
@@ -221,6 +262,9 @@ async function submitRecommendation() {
             </li>
           </ul>
 
+          <p v-if="totalCandidateCount > 0" class="nr-candidate-note">
+            총 <strong>{{ totalCandidateCount }}</strong>개 동네를 분석하여 최적 <strong>{{ recommendations.length }}</strong>곳을 선정했습니다.
+          </p>
           <p class="nr-disclaimer">추천 점수는 공개된 공공데이터를 기반으로 분석되며, 실제 생활 환경과 다를 수 있습니다.</p>
           <button class="nr-retry-btn" @click="backToLifestyleStep">다시 설정하기</button>
         </section>
@@ -300,8 +344,8 @@ async function submitRecommendation() {
               <NeighborhoodDetailMap
                 :houses="houseList"
                 :dong-address="[selectedNeighborhood.sidoName, selectedNeighborhood.sigunguName, selectedNeighborhood.dongName].filter(Boolean).join(' ')"
-                :highlighted-apt-seq="highlightedAptSeq"
-                @select="(seq) => highlightedAptSeq = seq"
+                :highlighted-apt-seq="mapHighlight"
+                @select="handleMapSelect"
               />
             </div>
 
@@ -322,10 +366,12 @@ async function submitRecommendation() {
                 <table class="table table-hover nr-detail-house-table">
                   <thead>
                     <tr>
-                      <th>아파트명</th>
+                      <th>건물명</th>
                       <th>법정동</th>
                       <th class="text-end">건축년도</th>
+                      <th class="text-center">거래 유형</th>
                       <th class="text-end">거래수</th>
+                      <th class="text-end">평균 가격</th>
                       <th class="text-end"></th>
                     </tr>
                   </thead>
@@ -333,7 +379,11 @@ async function submitRecommendation() {
                     <tr
                       v-for="house in houseList"
                       :key="house.aptSeq"
-                      :class="{ 'nr-detail-row--active': highlightedAptSeq === house.aptSeq }"
+                      :data-apt-seq="house.aptSeq"
+                      :class="{
+                        'nr-detail-row--active': highlightedAptSeq === house.aptSeq,
+                        'nr-detail-row--pinned': pinnedAptSeq === house.aptSeq,
+                      }"
                       @mouseenter="highlightedAptSeq = house.aptSeq"
                       @mouseleave="highlightedAptSeq = null"
                     >
@@ -345,9 +395,20 @@ async function submitRecommendation() {
                       </td>
                       <td class="small">{{ house.umdNm }}</td>
                       <td class="text-end mono">{{ house.buildYear ?? '-' }}</td>
+                      <td class="text-center">
+                        <span class="nr-deal-badge">{{ savedDealType }}</span>
+                      </td>
                       <td class="text-end">
                         <span class="mono fw-semibold">{{ number(house.dealCount) }}</span>
                         <span class="small text-muted"> 건</span>
+                      </td>
+                      <td class="text-end mono">
+                        <template v-if="house.avgPrice">
+                          {{ house.avgPrice >= 10000
+                              ? (house.avgPrice / 10000).toFixed(1) + '억'
+                              : number(house.avgPrice) + '만' }}
+                        </template>
+                        <template v-else>-</template>
                       </td>
                       <td class="text-end">
                         <RouterLink :to="`/houses/${house.aptSeq}`" class="btn btn-outline-primary btn-sm">
@@ -364,7 +425,21 @@ async function submitRecommendation() {
       </div>
     </template>
 
-    <!-- ④ 조건 설정 단계 -->
+    <!-- ④ 추천 로딩 화면 -->
+    <template v-else-if="recommendLoading">
+      <div class="nr-loading-page">
+        <div class="nr-loading-card">
+          <div class="nr-loading-spinner"></div>
+          <p class="nr-loading-stage">{{ loadingMessages[loadingStage] }}</p>
+          <p class="nr-loading-count-hint">
+            분석된 후보 동네 중 <strong>최적 3곳</strong>을 선정하고 있습니다
+          </p>
+          <p class="nr-loading-sub">잠시만 기다려 주세요</p>
+        </div>
+      </div>
+    </template>
+
+    <!-- ⑤ 조건 설정 단계 -->
     <template v-else>
       <section class="place-finder-hero place-condition-hero">
         <div class="place-finder-badge">동네 추천</div>
@@ -385,6 +460,8 @@ async function submitRecommendation() {
         <BudgetStep
           v-else-if="screen === 'budget'"
           v-model:budget-amount="budgetAmount"
+          v-model:deal-type="dealType"
+          v-model:housing-type="housingType"
           @prev="backToRadiusStep"
           @next="openLifestyleStep"
         />

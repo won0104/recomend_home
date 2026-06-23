@@ -3,11 +3,11 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { loadKakaoMap } from '../../utils/kakaoMap'
 
 const props = defineProps({
-  baseLocation: { type: Object, default: null }, // { lat, lng }
-  neighborhoods: { type: Array, default: () => [] }, // [{ rank, sidoName, sigunguName, dongName }]
+  baseLocation: { type: Object, default: null },
+  neighborhoods: { type: Array, default: () => [] },
 })
 
-const RANK_COLORS = ['#079455', '#22C55E', '#F97316']
+const RANK_COLORS = ['#2563EB', '#22C55E', '#F97316']
 
 const mapEl = ref(null)
 const errorMessage = ref('')
@@ -19,10 +19,7 @@ let baseMarker = null
 function clearOverlays() {
   overlays.forEach((o) => o.setMap(null))
   overlays = []
-  if (baseMarker) {
-    baseMarker.setMap(null)
-    baseMarker = null
-  }
+  if (baseMarker) { baseMarker.setMap(null); baseMarker = null }
 }
 
 function addNumberOverlay(position, rank) {
@@ -34,36 +31,27 @@ function addNumberOverlay(position, rank) {
     border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25);
     cursor:default;
   ">${rank}</div>`
-  const overlay = new window.kakao.maps.CustomOverlay({
-    map,
-    position,
-    content,
-    yAnchor: 0.5,
-    xAnchor: 0.5,
-  })
-  overlays.push(overlay)
+  overlays.push(new window.kakao.maps.CustomOverlay({
+    map, position, content, yAnchor: 0.5, xAnchor: 0.5,
+  }))
 }
 
 function addBaseMarker(position) {
-  const content = `<div style="
-    display:flex;flex-direction:column;align-items:center;gap:2px;
-  ">
+  const content = `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
     <div style="
-      background:#EF4444;color:#fff;font-size:11px;font-weight:700;
-      padding:3px 7px;border-radius:6px;white-space:nowrap;
-      box-shadow:0 1px 4px rgba(0,0,0,.25);
+      width:28px;height:28px;border-radius:50%;
+      background:#EF4444;border:3px solid #fff;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:13px;
+    ">📍</div>
+    <div style="
+      background:#EF4444;color:#fff;font-size:10px;font-weight:700;
+      padding:2px 6px;border-radius:4px;white-space:nowrap;
+      box-shadow:0 1px 3px rgba(0,0,0,.25);
     ">내 위치</div>
-    <div style="
-      width:0;height:0;border-left:6px solid transparent;
-      border-right:6px solid transparent;border-top:8px solid #EF4444;
-    "></div>
   </div>`
   baseMarker = new window.kakao.maps.CustomOverlay({
-    map,
-    position,
-    content,
-    yAnchor: 1,
-    xAnchor: 0.5,
+    map, position, content, yAnchor: 1.1, xAnchor: 0.5,
   })
 }
 
@@ -82,7 +70,6 @@ function geocodeAddress(address) {
 async function render() {
   if (!map) return
   clearOverlays()
-
   const bounds = new window.kakao.maps.LatLngBounds()
 
   if (props.baseLocation?.lat && props.baseLocation?.lng) {
