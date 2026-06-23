@@ -27,16 +27,21 @@ public class EstateMarketPdfTasklet implements Tasklet {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         var ctx = chunkContext.getStepContext().getStepExecution().getJobExecution().getExecutionContext();
-        EstateMarketReport report = (EstateMarketReport) ctx.get(BatchContextKeys.MARKET_REPORT);
-        List<EstateMarketItem> items = (List<EstateMarketItem>) ctx.get(BatchContextKeys.MARKET_ITEMS);
+        String reportId = (String) ctx.get(BatchContextKeys.REPORT_ID);
+
+        // PDF 단계도 같은 reportId로 DB에 보관된 거래 목록을 다시 읽는다.
+        // 따라서 앞 단계에서 수집한 전체 목록을 Spring Batch 내부 컨텍스트에 직렬화하지 않는다.
+        EstateMarketReport report = estateMarketBatchDao.findReportById(reportId);
+        List<EstateMarketItem> items = estateMarketBatchDao.findItemsByReportId(reportId);
+        if (report == null) {
+            throw new IllegalStateException("PDF 생성 대상 리포트를 찾을 수 없습니다. reportId=" + reportId);
+        }
 
         String pdfPath = estateMarketPdfService.createPdf(report, items);
         report.setPdfPath(pdfPath);
         estateMarketBatchDao.updatePdfPath(report);
-        ctx.put(BatchContextKeys.MARKET_REPORT, report);
 
         System.out.println("[EstateBatch-PDF] created: " + pdfPath);
         return RepeatStatus.FINISHED;
