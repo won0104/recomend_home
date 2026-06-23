@@ -5,6 +5,10 @@
 <mapper namespace="com.ssafy.prj.batch.commercial.CommercialMetricsBatchDao">
 
     <select id="findExistingDongCodes" resultType="string">
+        <!--
+            외부 API 법정동 코드가 우리 dongcodes에 존재하는지 확인한다.
+            존재하지 않는 코드는 dong_commercial_metrics의 외래 키를 만족할 수 없으므로 저장하지 않는다.
+        -->
         SELECT dong_code
         FROM dongcodes
         WHERE dong_code IN
@@ -14,11 +18,19 @@
     </select>
 
     <delete id="deleteByCategory">
+        <!--
+            전체 테이블을 비우지 않고, 현재 수집 중인 원천 지표의 이전 스냅샷만 교체한다.
+            따라서 예를 들어 의료 통계를 새로 저장해도 카페·외식 통계는 영향받지 않는다.
+        -->
         DELETE FROM dong_commercial_metrics
         WHERE category = #{category}
     </delete>
 
     <insert id="insertMetrics">
+        <!--
+            원본 상가업소 목록이 아니라 "법정동 + 카테고리 + 업소 수"만 저장한다.
+            이 작은 통계 테이블을 추천 API가 읽으므로 사용자 요청마다 외부 API를 호출할 필요가 없다.
+        -->
         INSERT INTO dong_commercial_metrics
             (dong_code, category, business_count, source_date)
         VALUES

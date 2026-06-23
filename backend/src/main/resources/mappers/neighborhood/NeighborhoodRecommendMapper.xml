@@ -25,15 +25,103 @@
           AND hi.longitude != ''
     </sql>
 
+    <!--
+        2단계 거리 필터로 잘못된 좌표 데이터를 완전히 차단한다.
+
+        문제: houseinfos.latitude/longitude 는 입력 오류가 많아 동 단위 평균(centroid)조차
+              잘못된 시도(예: 전라남도 동이 서울 좌표 평균)가 나올 수 있다.
+
+        해결:
+          1단계 — sgg_cd 앞 2자리(시도 코드)는 행정코드이므로 항상 정확하다.
+                  시도 중심점과 기준점 간 거리가 (반경 + 150km) 초과 시 즉시 차단한다.
+                  → 서울 5km 반경: 전라남도 중심(295km) > 155km → 차단
+          2단계 — 시도 게이트를 통과한 동에 대해 동 평균 좌표로 정밀 필터를 적용한다.
+    -->
     <select id="findLegalDongCodes" resultType="string">
-        SELECT DISTINCT c.legal_dong_code
+        SELECT dg.legal_dong_code
         FROM (
-            <include refid="legalDongCodeBase" />
-        ) c
-        WHERE c.distance_km &lt;= #{radiusKm}
-        <if test="maxPrice != null">
-            AND c.amount &lt;= #{maxPrice}
-        </if>
-        ORDER BY c.legal_dong_code
+            SELECT
+                CONCAT(hi.sgg_cd, hi.umd_cd)                    AS legal_dong_code,
+                MIN(CAST(LEFT(hi.sgg_cd, 2) AS UNSIGNED))        AS sido_code,
+                AVG(CAST(hi.latitude  AS DECIMAL(12, 8)))         AS dong_lat,
+                AVG(CAST(hi.longitude AS DECIMAL(12, 8)))         AS dong_lng
+            FROM houseinfos hi
+            <!-- 점수 계산에 사용할 법정동 코드가 있는 아파트만 후보 위치 계산에 사용한다. -->
+            JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+            WHERE hi.latitude  IS NOT NULL AND hi.latitude  != ''
+              AND hi.longitude IS NOT NULL AND hi.longitude != ''
+            GROUP BY CONCAT(hi.sgg_cd, hi.umd_cd)
+        ) dg
+        JOIN (
+            /* 시도별 중심 좌표 — 행정코드 기반이므로 좌표 오입력과 무관하게 신뢰 가능 */
+            SELECT 11 AS sc, 37.5665 AS slat, 126.9780 AS slng UNION ALL
+            SELECT 26, 35.1796, 129.0756 UNION ALL  /* 부산 */
+            SELECT 27, 35.8714, 128.6014 UNION ALL  /* 대구 */
+            SELECT 28, 37.4563, 126.7052 UNION ALL  /* 인천 */
+            SELECT 29, 35.1595, 126.8526 UNION ALL  /* 광주 */
+            SELECT 30, 36.3504, 127.3845 UNION ALL  /* 대전 */
+            SELECT 31, 35.5384, 129.3114 UNION ALL  /* 울산 */
+            SELECT 36, 36.4800, 127.2890 UNION ALL  /* 세종 */
+            SELECT 41, 37.2752, 127.0095 UNION ALL  /* 경기 */
+            SELECT 42, 37.5535, 128.2137 UNION ALL  /* 강원 */
+            SELECT 43, 36.6358, 127.4914 UNION ALL  /* 충북 */
+            SELECT 44, 36.5184, 126.8001 UNION ALL  /* 충남 */
+            SELECT 45, 35.7175, 127.1530 UNION ALL  /* 전북 */
+            SELECT 46, 34.8679, 126.9910 UNION ALL  /* 전남 */
+            SELECT 47, 36.4919, 128.8889 UNION ALL  /* 경북 */
+            SELECT 48, 35.4606, 128.2132 UNION ALL  /* 경남 */
+            SELECT 50, 33.4890, 126.4983             /* 제주 */
+        ) sido ON dg.sido_code = sido.sc
+        WHERE
+            /* 1단계: 시도 중심점 게이트 — 잘못된 좌표로 인한 엉뚱한 시도 완전 차단 */
+            (6371 * ACOS(LEAST(1, GREATEST(-1,
+                COS(RADIANS(#{originLat})) * COS(RADIANS(sido.slat)) *
+                COS(RADIANS(sido.slng) - RADIANS(#{originLng})) +
+                SIN(RADIANS(#{originLat})) * SIN(RADIANS(sido.slat))
+            )))) &lt;= #{radiusKm} + 150
+            /* 2단계: 동 평균 좌표 정밀 필터 */
+            AND (6371 * ACOS(LEAST(1, GREATEST(-1,
+                COS(RADIANS(#{originLat})) * COS(RADIANS(dg.dong_lat)) *
+                COS(RADIANS(dg.dong_lng) - RADIANS(#{originLng})) +
+                SIN(RADIANS(#{originLat})) * SIN(RADIANS(dg.dong_lat))
+            )))) &lt;= #{radiusKm}
+            <!--
+                기본 예산 정책은 반경 안에 들어온 동에 대해서만 확인한다.
+                기존처럼 housedeals 전체를 먼저 JOIN하면 대량 거래 데이터 때문에 요청이 오래 걸릴 수 있다.
+                따라서 후보 동 하나의 거래만 apt_seq 인덱스로 확인하는 EXISTS 구조를 사용한다.
+            -->
+            AND EXISTS (
+                SELECT 1
+                FROM houseinfos price_hi
+                JOIN housedeals price_hd ON price_hd.apt_seq = price_hi.apt_seq
+                WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
+                GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
+                HAVING COUNT(price_hd.no) >= 5
+                <if test="maxPrice != null">
+                    AND SUM(CASE
+                        WHEN CAST(REPLACE(COALESCE(price_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
+                        THEN 1 ELSE 0
+                    END) / COUNT(price_hd.no) &gt;= 0.60
+                </if>
+            )
+        ORDER BY dg.legal_dong_code
+    </select>
+
+    <!--
+        점수 계산으로 선정된 법정동 코드에 지역명을 붙인다.
+        dongcodes가 지역명의 기준 테이블이므로 학교·공원·상권 테이블을 다시 조인할 필요가 없다.
+    -->
+    <select id="findNeighborhoodsByDongCodes"
+            resultType="com.ssafy.prj.model.dto.neighborhood.RecommendedNeighborhood">
+        SELECT
+            dong_code AS lawdCd,
+            sido_name AS sidoName,
+            gugun_name AS sigunguName,
+            dong_name AS dongName
+        FROM dongcodes
+        WHERE dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
     </select>
 </mapper>

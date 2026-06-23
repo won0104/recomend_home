@@ -32,12 +32,15 @@ public class HouseInfoApiController {
     private final HouseInfoService houseInfoService;
 
     @GetMapping("/houses")
-    @Operation(summary = "주택 목록", description = "공개 API입니다. 법정동 코드, 동명, 아파트 검색어로 필터링합니다.")
+    @Operation(summary = "주택 목록", description = "공개 API입니다. 법정동과 예산으로 추천 조건에 맞는 아파트를 필터링합니다. 거래 유형·주거 형태는 원천 데이터 확장 전까지 선택값만 유지합니다.")
     public ResponseEntity<?> list(@Parameter(description = "법정동 코드", example = "11680") @RequestParam(required = false) String lawdCd,
                                   @Parameter(description = "동명", example = "개포동") @RequestParam(required = false) String dong,
-                                  @Parameter(description = "아파트 검색어", example = "래미안") @RequestParam(required = false) String keyword) throws Exception {
+                                  @Parameter(description = "아파트 검색어", example = "래미안") @RequestParam(required = false) String keyword,
+                                  @Parameter(description = "최대 거래가(만원)", example = "30000") @RequestParam(required = false) Integer maxPrice,
+                                  @Parameter(description = "거래 유형", example = "매매") @RequestParam(required = false) String dealType,
+                                  @Parameter(description = "주거 형태", example = "아파트") @RequestParam(required = false) String housingType) throws Exception {
         return ResponseEntity.ok(ApiResponse.ok("주택 목록입니다.",
-                houseInfoService.search(lawdCd, dong, keyword)));
+                houseInfoService.search(lawdCd, dong, keyword, maxPrice, dealType, housingType)));
     }
 
     @GetMapping("/houses/{aptSeq}")

@@ -9,6 +9,10 @@ public class NeighborhoodRecommendRequest {
     private Double longitude;
     private Double radiusKm;
     private Integer maxPrice;
+    /** 화면에서 선택한 거래 유형. 원천 데이터 확장 시 후보·상세 필터에 연결할 값이다. */
+    private String dealType = "매매";
+    /** 화면에서 선택한 주거 형태. 원천 데이터 확장 시 후보·상세 필터에 연결할 값이다. */
+    private String housingType = "아파트";
     private List<String> priorities = new ArrayList<>();
     private String lifestyleMood;
 
@@ -42,6 +46,22 @@ public class NeighborhoodRecommendRequest {
 
     public void setMaxPrice(Integer maxPrice) {
         this.maxPrice = maxPrice;
+    }
+
+    public String getDealType() {
+        return dealType;
+    }
+
+    public void setDealType(String dealType) {
+        this.dealType = dealType;
+    }
+
+    public String getHousingType() {
+        return housingType;
+    }
+
+    public void setHousingType(String housingType) {
+        this.housingType = housingType;
     }
 
     public List<String> getPriorities() {

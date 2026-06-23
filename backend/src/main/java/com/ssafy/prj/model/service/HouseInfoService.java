@@ -7,7 +7,8 @@ import com.ssafy.prj.model.dto.RealEstateTransaction;
 
 public interface HouseInfoService {
 
-    List<HouseInfo> search(String sigunguCode, String dongName, String keyword) throws Exception;
+    List<HouseInfo> search(String sigunguCode, String dongName, String keyword,
+            Integer maxPrice, String dealType, String housingType) throws Exception;
 
     HouseInfo findByAptSeq(String aptSeq) throws Exception;
 
