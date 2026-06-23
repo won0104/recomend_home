@@ -12,6 +12,7 @@ import HouseListView from '../views/HouseListView.vue'
 import HouseDetailView from '../views/HouseDetailView.vue'
 import HouseFormView from '../views/HouseFormView.vue'
 import NeighborhoodRecommendView from '../views/NeighborhoodRecommendView.vue'
+import ChatBotView from '../views/ChatBotView.vue'
 import MyPageView from '../views/MyPageView.vue'
 import AdminUsersView from '../views/AdminUsersView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
@@ -35,6 +36,7 @@ const router = createRouter({
     { path: '/houses/:aptSeq', name: 'house-detail', component: HouseDetailView },
     { path: '/houses/:aptSeq/edit', name: 'house-edit', component: HouseFormView },
     { path: '/neighborhood-recommend', name: 'neighborhood-recommend', component: NeighborhoodRecommendView },
+    { path: '/chat', name: 'chatbot', component: ChatBotView },
     { path: '/places', redirect: '/neighborhood-recommend' },
     { path: '/mypage', name: 'mypage', component: MyPageView },
     { path: '/admin/users', name: 'admin-users', component: AdminUsersView },
