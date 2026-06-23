@@ -19,6 +19,10 @@ const commuteRadius = ref(15)
 const budgetAmount = ref(3)
 const dealType = ref('매매')
 const housingType = ref('아파트')
+const dealAmountMin = ref(null)
+const depositMin = ref(null)
+const monthlyRentMin = ref(null)
+const monthlyRentMax = ref(null)
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
@@ -112,12 +116,17 @@ const currentStep = computed(() => {
 const selectedAddress = computed(() =>
   selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || ''
 )
-const maxPrice = computed(() =>
+const activeBudgetMax = computed(() =>
   Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000)
 )
-const budgetLabel = computed(() =>
-  Number(budgetAmount.value) >= 10 ? '제한 없음' : `${budgetAmount.value}억원 이하`
-)
+const maxPrice = computed(() => dealType.value === '매매' ? activeBudgetMax.value : null)
+const budgetLabel = computed(() => {
+  const maxLabel = Number(budgetAmount.value) >= 10 ? '제한 없음' : `${budgetAmount.value}억원 이하`
+  if (dealType.value === '매매') return `매매가 ${dealAmountMin.value ? `${number(dealAmountMin.value)}만원 ~ ` : ''}${maxLabel}`
+  if (dealType.value === '전세') return `보증금 ${depositMin.value ? `${number(depositMin.value)}만원 ~ ` : ''}${maxLabel}`
+  const monthly = `${monthlyRentMin.value ? `${number(monthlyRentMin.value)} ~ ` : ''}${monthlyRentMax.value ? `${number(monthlyRentMax.value)}만원` : '제한 없음'}`
+  return `보증금 ${depositMin.value ? `${number(depositMin.value)}만원 ~ ` : ''}${maxLabel}, 월세 ${monthly}`
+})
 const baseLocation = computed(() =>
   selectedPlace.value ? { lat: Number(selectedPlace.value.y), lng: Number(selectedPlace.value.x) } : null
 )
@@ -128,10 +137,15 @@ const recommendationCondition = computed(() => ({
   latitude: Number(selectedPlace.value?.y),
   longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
+  // maxPrice는 구 버전 요청 호환용이다. 새 후보 SQL은 아래 거래 유형별 금액 필드를 우선 사용한다.
   maxPrice: maxPrice.value,
-  // 거래·주거 선택값도 요청에 보존한다. 현재 DB 필터는 예산에 적용되고,
-  // 향후 전세·월세·주택 데이터가 추가되면 이 값으로 같은 조건을 연결한다.
   dealType: dealType.value,
+  dealAmountMin: dealType.value === '매매' ? dealAmountMin.value : null,
+  dealAmountMax: dealType.value === '매매' ? activeBudgetMax.value : null,
+  depositMin: dealType.value !== '매매' ? depositMin.value : null,
+  depositMax: dealType.value !== '매매' ? activeBudgetMax.value : null,
+  monthlyRentMin: dealType.value === '월세' ? monthlyRentMin.value : null,
+  monthlyRentMax: dealType.value === '월세' ? monthlyRentMax.value : null,
   housingType: housingType.value,
   priorities: selectedLifestyleIds.value,
   lifestyleMood: lifestyleMood.value,
@@ -161,6 +175,12 @@ async function openDetail(rec) {
       maxPrice: maxPrice.value,
       dealType: dealType.value,
       housingType: housingType.value,
+      dealAmountMin: dealType.value === '매매' ? dealAmountMin.value : undefined,
+      dealAmountMax: dealType.value === '매매' ? activeBudgetMax.value : undefined,
+      depositMin: dealType.value !== '매매' ? depositMin.value : undefined,
+      depositMax: dealType.value !== '매매' ? activeBudgetMax.value : undefined,
+      monthlyRentMin: dealType.value === '월세' ? monthlyRentMin.value : undefined,
+      monthlyRentMax: dealType.value === '월세' ? monthlyRentMax.value : undefined,
     })
     houseList.value = Array.isArray(res.data) ? res.data : []
   } catch {
@@ -380,8 +400,9 @@ async function submitRecommendation() {
                       <th>법정동</th>
                       <th class="text-end">건축년도</th>
                       <th class="text-center">거래 유형</th>
-                      <th class="text-end">거래수</th>
-                      <th class="text-end">평균 가격</th>
+                      <th v-if="savedDealType === '매매'" class="text-end">거래수</th>
+                      <th v-if="savedDealType === '매매'" class="text-end">평균 매매가</th>
+                      <th v-else class="text-center">조건</th>
                       <th class="text-end"></th>
                     </tr>
                   </thead>
@@ -408,11 +429,11 @@ async function submitRecommendation() {
                       <td class="text-center">
                         <span class="nr-deal-badge">{{ savedDealType }}</span>
                       </td>
-                      <td class="text-end">
+                      <td v-if="savedDealType === '매매'" class="text-end">
                         <span class="mono fw-semibold">{{ number(house.dealCount) }}</span>
                         <span class="small text-muted"> 건</span>
                       </td>
-                      <td class="text-end mono">
+                      <td v-if="savedDealType === '매매'" class="text-end mono">
                         <template v-if="house.avgPrice">
                           {{ house.avgPrice >= 10000
                               ? (house.avgPrice / 10000).toFixed(1) + '억'
@@ -420,6 +441,7 @@ async function submitRecommendation() {
                         </template>
                         <template v-else>-</template>
                       </td>
+                      <td v-else class="text-center"><span class="small text-success">조건 일치</span></td>
                       <td class="text-end">
                         <RouterLink :to="`/houses/${house.aptSeq}`" class="btn btn-outline-primary btn-sm">
                           상세
@@ -472,6 +494,10 @@ async function submitRecommendation() {
           v-model:budget-amount="budgetAmount"
           v-model:deal-type="dealType"
           v-model:housing-type="housingType"
+          v-model:deal-amount-min="dealAmountMin"
+          v-model:deposit-min="depositMin"
+          v-model:monthly-rent-min="monthlyRentMin"
+          v-model:monthly-rent-max="monthlyRentMax"
           @prev="backToRadiusStep"
           @next="openLifestyleStep"
         />

@@ -13,16 +13,19 @@ const props = defineProps({
 const search = ref({
   housingType: 'all',
   contractType: 'all',
+  rentType: 'all',
   dealYmd: '',
   lawdCode: '',
   sido: '',
   sigungu: '',
   emd: '',
   keyword: '',
-  priceMin: '',
-  priceMax: '',
-  areaMin: '',
-  areaMax: '',
+  dealAmountMin: '',
+  dealAmountMax: '',
+  depositMin: '',
+  depositMax: '',
+  monthlyRentMin: '',
+  monthlyRentMax: '',
   sortBy: 'latest'
 })
 const results = ref([])
@@ -53,6 +56,17 @@ function transactionAmountText(item) {
   return monthlyRent > 0 ? `보증금 ${deposit} / 월세 ${number(monthlyRent)}` : `전세 ${deposit}`
 }
 
+function onContractTypeChange() {
+  // 매매와 전월세의 금액 의미가 다르므로, 거래 유형을 바꾸면 이전 범위 조건을 비운다.
+  search.value.rentType = 'all'
+  search.value.dealAmountMin = ''
+  search.value.dealAmountMax = ''
+  search.value.depositMin = ''
+  search.value.depositMax = ''
+  search.value.monthlyRentMin = ''
+  search.value.monthlyRentMax = ''
+}
+
 async function runSearch() {
   loading.value = true
   statusMessage.value = ''
@@ -61,8 +75,15 @@ async function runSearch() {
     dealYmd: search.value.dealYmd || undefined,
     housingType: search.value.housingType,
     contractType: search.value.contractType,
+    rentType: search.value.contractType === 'rent' ? search.value.rentType : undefined,
     dong: selectedDongName(),
-    keyword: search.value.keyword || undefined
+    keyword: search.value.keyword || undefined,
+    dealAmountMin: search.value.contractType === 'deal' ? search.value.dealAmountMin || undefined : undefined,
+    dealAmountMax: search.value.contractType === 'deal' ? search.value.dealAmountMax || undefined : undefined,
+    depositMin: search.value.contractType === 'rent' ? search.value.depositMin || undefined : undefined,
+    depositMax: search.value.contractType === 'rent' ? search.value.depositMax || undefined : undefined,
+    monthlyRentMin: search.value.contractType === 'rent' && search.value.rentType !== 'jeonse' ? search.value.monthlyRentMin || undefined : undefined,
+    monthlyRentMax: search.value.contractType === 'rent' && search.value.rentType !== 'jeonse' ? search.value.monthlyRentMax || undefined : undefined
   }
   try {
     const [response, summaryResponse] = await Promise.all([
@@ -140,16 +161,19 @@ function resetFilters() {
   search.value = {
     housingType: 'all',
     contractType: 'all',
+    rentType: 'all',
     dealYmd: '',
     lawdCode: '',
     sido: '',
     sigungu: '',
     emd: '',
     keyword: '',
-    priceMin: '',
-    priceMax: '',
-    areaMin: '',
-    areaMax: '',
+    dealAmountMin: '',
+    dealAmountMax: '',
+    depositMin: '',
+    depositMax: '',
+    monthlyRentMin: '',
+    monthlyRentMax: '',
     sortBy: 'latest'
   }
   results.value = []
@@ -202,10 +226,18 @@ onMounted(async () => {
               </div>
               <div class="span-6">
                 <label class="form-label small">거래 유형</label>
-                <select v-model="search.contractType" class="form-select form-select-sm">
+                <select v-model="search.contractType" class="form-select form-select-sm" @change="onContractTypeChange">
                   <option value="all">전체</option>
                   <option value="deal">매매</option>
                   <option value="rent">전월세</option>
+                </select>
+              </div>
+              <div v-if="search.contractType === 'rent'" class="span-6">
+                <label class="form-label small">전월세 유형</label>
+                <select v-model="search.rentType" class="form-select form-select-sm">
+                  <option value="all">전세·월세 전체</option>
+                  <option value="jeonse">전세</option>
+                  <option value="monthly">월세</option>
                 </select>
               </div>
               <div class="span-6">
@@ -289,10 +321,18 @@ onMounted(async () => {
                 </select>
               </div>
               <div class="span-6"><label class="form-label small">아파트명/법정동</label><input v-model="search.keyword" class="form-control form-control-sm" placeholder="예: 광화문풍림" /></div>
-              <div class="span-3"><label class="form-label small">최소 금액 (만원)</label><input v-model="search.priceMin" type="number" min="0" class="form-control form-control-sm" /></div>
-              <div class="span-3"><label class="form-label small">최대 금액 (만원)</label><input v-model="search.priceMax" type="number" min="0" class="form-control form-control-sm" /></div>
-              <div class="span-3"><label class="form-label small">최소 면적 (㎡)</label><input v-model="search.areaMin" type="number" min="0" step="0.1" class="form-control form-control-sm" /></div>
-              <div class="span-3"><label class="form-label small">최대 면적 (㎡)</label><input v-model="search.areaMax" type="number" min="0" step="0.1" class="form-control form-control-sm" /></div>
+              <template v-if="search.contractType === 'deal'">
+                <div class="span-3"><label class="form-label small">최소 매매가 (만원)</label><input v-model="search.dealAmountMin" type="number" min="0" class="form-control form-control-sm" /></div>
+                <div class="span-3"><label class="form-label small">최대 매매가 (만원)</label><input v-model="search.dealAmountMax" type="number" min="0" class="form-control form-control-sm" /></div>
+              </template>
+              <template v-else-if="search.contractType === 'rent'">
+                <div class="span-3"><label class="form-label small">최소 보증금 (만원)</label><input v-model="search.depositMin" type="number" min="0" class="form-control form-control-sm" /></div>
+                <div class="span-3"><label class="form-label small">최대 보증금 (만원)</label><input v-model="search.depositMax" type="number" min="0" class="form-control form-control-sm" /></div>
+                <template v-if="search.rentType !== 'jeonse'">
+                  <div class="span-3"><label class="form-label small">최소 월세 (만원)</label><input v-model="search.monthlyRentMin" type="number" min="0" class="form-control form-control-sm" /></div>
+                  <div class="span-3"><label class="form-label small">최대 월세 (만원)</label><input v-model="search.monthlyRentMax" type="number" min="0" class="form-control form-control-sm" /></div>
+                </template>
+              </template>
             </div>
           </div>
           <div class="table-responsive result-table">

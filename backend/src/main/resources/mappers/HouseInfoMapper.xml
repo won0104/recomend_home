@@ -57,15 +57,27 @@
         hi.longitude,
         dc.sido_name,
         dc.gugun_name,
-        <!-- 상세 목록의 거래 수·평균 가격도 추천에 사용한 예산 조건을 동일하게 적용한다. -->
+        <!-- 상세 목록의 거래 수·평균 매매가도 추천에 사용한 매매가 범위를 동일하게 적용한다. -->
         (SELECT COUNT(*) FROM housedeals hd WHERE hd.apt_seq = hi.apt_seq
-            <if test="maxPrice != null">
+            <if test="dealAmountMin != null">
+                AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{dealAmountMin}
+            </if>
+            <if test="dealAmountMax != null">
+                AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{dealAmountMax}
+            </if>
+            <if test="dealAmountMax == null and maxPrice != null">
                 AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
             </if>
         ) AS deal_count,
         (SELECT CAST(AVG(CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED)) AS SIGNED)
          FROM housedeals hd2 WHERE hd2.apt_seq = hi.apt_seq
-            <if test="maxPrice != null">
+            <if test="dealAmountMin != null">
+                AND CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{dealAmountMin}
+            </if>
+            <if test="dealAmountMax != null">
+                AND CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{dealAmountMax}
+            </if>
+            <if test="dealAmountMax == null and maxPrice != null">
                 AND CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
             </if>
         ) AS avg_price
@@ -94,15 +106,64 @@
             <if test="keyword != null and keyword.trim() != ''">
                 AND hi.apt_nm LIKE CONCAT('%', #{keyword}, '%')
             </if>
-            <!-- 예산이 있을 때는 예산 이하 거래가 적어도 한 건 존재하는 아파트만 표시한다. -->
-            <if test="maxPrice != null">
-                AND EXISTS (
-                    SELECT 1
-                    FROM housedeals affordable_hd
-                    WHERE affordable_hd.apt_seq = hi.apt_seq
-                      AND CAST(REPLACE(COALESCE(affordable_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
-                )
-            </if>
+            <!--
+                상세 목록도 동네 추천 후보 SQL과 같은 거래 유형을 사용한다.
+                전세는 월세 0원, 월세는 월세 0원 초과로 판별하며, 금액 범위 안 거래가 한 건이라도
+                있는 아파트만 지도·목록에 보인다.
+            -->
+            <choose>
+                <when test="dealType != null and dealType == '전세'">
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houserents hr
+                        WHERE hr.apt_seq = hi.apt_seq
+                          AND hr.monthly_rent = 0
+                        <if test="depositMin != null">
+                            AND hr.deposit &gt;= #{depositMin}
+                        </if>
+                        <if test="depositMax != null">
+                            AND hr.deposit &lt;= #{depositMax}
+                        </if>
+                    )
+                </when>
+                <when test="dealType != null and dealType == '월세'">
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houserents hr
+                        WHERE hr.apt_seq = hi.apt_seq
+                          AND hr.monthly_rent &gt; 0
+                        <if test="depositMin != null">
+                            AND hr.deposit &gt;= #{depositMin}
+                        </if>
+                        <if test="depositMax != null">
+                            AND hr.deposit &lt;= #{depositMax}
+                        </if>
+                        <if test="monthlyRentMin != null">
+                            AND hr.monthly_rent &gt;= #{monthlyRentMin}
+                        </if>
+                        <if test="monthlyRentMax != null">
+                            AND hr.monthly_rent &lt;= #{monthlyRentMax}
+                        </if>
+                    )
+                </when>
+                <otherwise>
+                    AND EXISTS (
+                        SELECT 1
+                        FROM housedeals hd
+                        WHERE hd.apt_seq = hi.apt_seq
+                        <if test="dealAmountMin != null">
+                            AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{dealAmountMin}
+                        </if>
+                        <if test="dealAmountMax != null">
+                            AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{dealAmountMax}
+                        </if>
+                        <!-- 구 화면의 maxPrice는 새 dealAmountMax가 없을 때만 매매 최대가로 사용한다. -->
+                        <if test="dealAmountMax == null and maxPrice != null">
+                            AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
+                        </if>
+                    )
+                </otherwise>
+            </choose>
         </where>
         ORDER BY hi.apt_nm ASC
         LIMIT 200

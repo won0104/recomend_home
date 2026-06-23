@@ -52,14 +52,10 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
     @Transactional(readOnly = true)
     public NeighborhoodRecommendResponse recommend(NeighborhoodRecommendRequest request) {
         validate(request);
+        normalizeLegacyBudget(request);
 
         // 1. 주거 조건으로 먼저 후보 법정동 목록을 좁힌다.
-        List<String> legalDongCodes = neighborhoodRecommendMapper.findLegalDongCodes(
-            request.getLatitude(),
-            request.getLongitude(),
-            request.getRadiusKm(),
-            request.getMaxPrice()
-        );
+        List<String> legalDongCodes = neighborhoodRecommendMapper.findLegalDongCodes(request);
 
         // 2. "CAFE", "PARK" 같은 HTTP 문자열을 점수 계산기가 이해하는 enum으로 변환한다.
         List<SurveyCategory> priorities = toSurveyCategories(request.getPriorities());
@@ -368,8 +364,56 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         if (request.getRadiusKm() == null || request.getRadiusKm() <= 0) {
             throw new IllegalArgumentException("반경 범위는 0보다 커야 합니다.");
         }
-        if (request.getMaxPrice() != null && request.getMaxPrice() <= 0) {
-            throw new IllegalArgumentException("예산 범위는 0보다 커야 합니다.");
+        validatePositiveBudget("매매가 최소", request.getDealAmountMin());
+        validatePositiveBudget("매매가 최대", request.getDealAmountMax());
+        validatePositiveBudget("보증금 최소", request.getDepositMin());
+        validatePositiveBudget("보증금 최대", request.getDepositMax());
+        validatePositiveBudget("월세 최소", request.getMonthlyRentMin());
+        validatePositiveBudget("월세 최대", request.getMonthlyRentMax());
+        validatePositiveBudget("예산", request.getMaxPrice());
+        validateRange("매매가", request.getDealAmountMin(), request.getDealAmountMax());
+        validateRange("보증금", request.getDepositMin(), request.getDepositMax());
+        validateRange("월세", request.getMonthlyRentMin(), request.getMonthlyRentMax());
+
+        String dealType = request.getDealType() == null ? "매매" : request.getDealType().trim();
+        if (!List.of("매매", "전세", "월세").contains(dealType)) {
+            throw new IllegalArgumentException("거래 유형은 매매, 전세, 월세 중 하나여야 합니다.");
+        }
+        request.setDealType(dealType);
+    }
+
+    /**
+     * 이전 화면은 maxPrice 하나만 보냈다. 새 클라이언트는 거래 유형에 맞는 금액 필드를 보내며,
+     * 구 클라이언트는 선택한 거래 유형에 따라 maxPrice를 매매가 또는 보증금 최대값으로 해석한다.
+     */
+    private void normalizeLegacyBudget(NeighborhoodRecommendRequest request) {
+        if (request.getMaxPrice() == null) {
+            return;
+        }
+        switch (request.getDealType()) {
+            case "매매" -> {
+                if (request.getDealAmountMax() == null) {
+                    request.setDealAmountMax(request.getMaxPrice());
+                }
+            }
+            case "전세", "월세" -> {
+                if (request.getDepositMax() == null) {
+                    request.setDepositMax(request.getMaxPrice());
+                }
+            }
+            default -> throw new IllegalStateException("검증되지 않은 거래 유형입니다.");
+        }
+    }
+
+    private void validatePositiveBudget(String label, Integer value) {
+        if (value != null && value < 0) {
+            throw new IllegalArgumentException(label + "은(는) 0 이상이어야 합니다.");
+        }
+    }
+
+    private void validateRange(String label, Integer min, Integer max) {
+        if (min != null && max != null && min > max) {
+            throw new IllegalArgumentException(label + " 최소값은 최대값보다 클 수 없습니다.");
         }
     }
 }

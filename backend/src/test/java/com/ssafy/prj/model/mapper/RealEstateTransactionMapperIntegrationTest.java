@@ -55,11 +55,22 @@ class RealEstateTransactionMapperIntegrationTest {
                      deposit, monthly_rent, source_hash)
                 VALUES (?, '10', 2099, 1, 1, 59.99, 10000, 50, ?)
                 """, aptSeq, UUID.randomUUID().toString().replace("-", ""));
+        jdbcTemplate.update("""
+                INSERT INTO houserents
+                    (apt_seq, floor, deal_year, deal_month, deal_day, exclu_use_ar,
+                     deposit, monthly_rent, source_hash)
+                VALUES (?, '11', 2099, 1, 2, 59.99, 20000, 0, ?)
+                """, aptSeq, UUID.randomUUID().toString().replace("-", ""));
 
         SearchCondition condition = new SearchCondition();
         condition.setLawdCd(lawdCd);
         condition.setContractType("rent");
         condition.setDealYmd("209901");
+        condition.setRentType("monthly");
+        condition.setDepositMin(9_000);
+        condition.setDepositMax(11_000);
+        condition.setMonthlyRentMin(40);
+        condition.setMonthlyRentMax(60);
 
         var transactions = transactionMapper.search(condition);
         TransactionSummary summary = transactionMapper.summarize(condition);
@@ -72,5 +83,23 @@ class RealEstateTransactionMapperIntegrationTest {
         assertThat(summary.getTotalCount()).isEqualTo(1);
         assertThat(summary.getDealCount()).isZero();
         assertThat(summary.getRentCount()).isEqualTo(1);
+
+        SearchCondition jeonseCondition = new SearchCondition();
+        jeonseCondition.setLawdCd(lawdCd);
+        jeonseCondition.setContractType("rent");
+        jeonseCondition.setDealYmd("209901");
+        jeonseCondition.setRentType("jeonse");
+        jeonseCondition.setDepositMin(19_000);
+        jeonseCondition.setDepositMax(21_000);
+
+        var jeonseTransactions = transactionMapper.search(jeonseCondition);
+        TransactionSummary jeonseSummary = transactionMapper.summarize(jeonseCondition);
+
+        assertThat(jeonseTransactions).singleElement().satisfies(transaction -> {
+            assertThat(transaction.getDeposit()).isEqualTo(20_000);
+            assertThat(transaction.getMonthlyRent()).isZero();
+        });
+        assertThat(jeonseSummary.getTotalCount()).isEqualTo(1);
+        assertThat(jeonseSummary.getRentCount()).isEqualTo(1);
     }
 }

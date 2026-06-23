@@ -1,9 +1,9 @@
 package com.ssafy.prj.model.service.neighborhood;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -12,6 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -67,7 +68,7 @@ class NeighborhoodRecommendServiceImplTest {
     void 후보_동에_점수를_계산하고_지역명을_붙여_프론트_응답으로_반환한다() {
         // 1. 위치·예산 필터를 통과한 후보 법정동 3개가 Mapper에서 조회됐다고 가정한다.
         List<String> candidateDongCodes = List.of("1111010100", "1111010200", "1111010300");
-        when(neighborhoodRecommendMapper.findLegalDongCodes(anyDouble(), anyDouble(), anyDouble(), any()))
+        when(neighborhoodRecommendMapper.findLegalDongCodes(any()))
             .thenReturn(candidateDongCodes);
 
         // 2. 실제 점수 계산 서비스가 이미 순위와 점수를 만든 결과를 준비한다.
@@ -108,6 +109,13 @@ class NeighborhoodRecommendServiceImplTest {
             .containsExactly("신교동", "청운동", "궁정동");
         assertThat(response.getRecommendations()).extracting(RecommendedNeighborhood::getScore)
             .containsExactly(88.0, 80.0, 72.0);
+
+        // 이전 화면의 maxPrice 요청도 매매가 최대값으로 바꿔 후보 SQL에 전달한다.
+        ArgumentCaptor<NeighborhoodRecommendRequest> requestCaptor = ArgumentCaptor.forClass(
+            NeighborhoodRecommendRequest.class
+        );
+        verify(neighborhoodRecommendMapper).findLegalDongCodes(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getDealAmountMax()).isEqualTo(30_000);
     }
 
     /** 프론트가 보내는 최소 추천 요청을 만든다. */
