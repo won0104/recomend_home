@@ -8,6 +8,7 @@ import NeighborhoodResultMap from '../components/neighborhood/NeighborhoodResult
 import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
+import TransactionHousingStep from '../components/neighborhood/TransactionHousingStep.vue'
 import { fetchHouses } from '../api/houses'
 import { recommendNeighborhood } from '../api/neighborhoods'
 import { number } from '../utils/format'
@@ -109,8 +110,9 @@ function getWeaknessTags(categoryScores) {
 const RANK_COLORS = { 1: '#2563EB', 2: '#22C55E', 3: '#F97316' }
 
 const currentStep = computed(() => {
-  if (screen.value === 'budget') return 2
-  if (screen.value === 'lifestyle') return 3
+  if (screen.value === 'transaction') return 2
+  if (screen.value === 'budget') return 3
+  if (screen.value === 'lifestyle') return 4
   return 1
 })
 const selectedAddress = computed(() =>
@@ -153,10 +155,12 @@ const recommendationCondition = computed(() => ({
 
 function handlePlaceSelect(place) { selectedPlace.value = place }
 function openRadiusStep(place) { selectedPlace.value = place; screen.value = 'radius' }
+function openTransactionStep() { screen.value = 'transaction' }
 function openBudgetStep() { screen.value = 'budget' }
 function openLifestyleStep() { screen.value = 'lifestyle' }
 function backToSearch() { screen.value = 'search' }
 function backToRadiusStep() { screen.value = 'radius' }
+function backToTransactionStep() { screen.value = 'transaction' }
 function backToBudgetStep() { screen.value = 'budget' }
 function backToLifestyleStep() { screen.value = 'lifestyle' }
 function backToResult() { screen.value = 'result' }
@@ -476,7 +480,7 @@ async function submitRecommendation() {
       <section class="place-finder-hero place-condition-hero">
         <div class="place-finder-badge">동네 추천</div>
         <h1>나만의 조건으로<br /><span>완벽한 동네</span>를 찾아보세요</h1>
-        <p>3단계 설정만으로 당신에게 딱 맞는 동네를 추천받으세요</p>
+        <p>4단계 설정으로 당신에게 딱 맞는 동네를 추천받으세요</p>
       </section>
 
       <section class="condition-setup-shell" aria-label="동네 추천 조건 설정">
@@ -487,18 +491,24 @@ async function submitRecommendation() {
           :selected-place="selectedPlace"
           :selected-address="selectedAddress"
           @prev="backToSearch"
+          @next="openTransactionStep"
+        />
+        <TransactionHousingStep
+          v-else-if="screen === 'transaction'"
+          v-model:deal-type="dealType"
+          v-model:housing-type="housingType"
+          @prev="backToRadiusStep"
           @next="openBudgetStep"
         />
         <BudgetStep
           v-else-if="screen === 'budget'"
           v-model:budget-amount="budgetAmount"
-          v-model:deal-type="dealType"
-          v-model:housing-type="housingType"
+          :deal-type="dealType"
           v-model:deal-amount-min="dealAmountMin"
           v-model:deposit-min="depositMin"
           v-model:monthly-rent-min="monthlyRentMin"
           v-model:monthly-rent-max="monthlyRentMax"
-          @prev="backToRadiusStep"
+          @prev="backToTransactionStep"
           @next="openLifestyleStep"
         />
         <LifestyleStep

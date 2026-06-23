@@ -1309,17 +1309,17 @@ dl.row dd {
 .condition-stepper {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 18px;
   margin: 0 auto 26px;
-  max-width: 620px;
+  max-width: 760px;
 }
 .condition-stepper::before {
   content: "";
   position: absolute;
   top: 18px;
-  left: 16%;
-  right: 16%;
+  left: 12.5%;
+  right: 12.5%;
   height: 2px;
   background: var(--border);
 }
