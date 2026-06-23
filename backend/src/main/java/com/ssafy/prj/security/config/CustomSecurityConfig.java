@@ -19,7 +19,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-import com.ssafy.prj.security.dto.CustomUserDetails;
 import com.ssafy.prj.security.password.Sha256PasswordEncoder;
 import com.ssafy.prj.security.web.SecurityResponseHelper;
 

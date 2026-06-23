@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.batch.commercial.CommercialMetricsBatchDao">
+
+    <select id="findExistingDongCodes" resultType="string">
+        SELECT dong_code
+        FROM dongcodes
+        WHERE dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+    </select>
+
+    <delete id="deleteByCategory">
+        DELETE FROM dong_commercial_metrics
+        WHERE category = #{category}
+    </delete>
+
+    <insert id="insertMetrics">
+        INSERT INTO dong_commercial_metrics
+            (dong_code, category, business_count, source_date)
+        VALUES
+        <foreach collection="metrics" item="metric" separator=",">
+            (#{metric.dongCode}, #{metric.category}, #{metric.businessCount}, #{metric.sourceDate})
+        </foreach>
+    </insert>
+</mapper>

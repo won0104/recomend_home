@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper">
+
+    <select id="countByDongCodes"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodCommercialCount">
+        SELECT
+            d.dong_code AS dongCode,
+            COALESCE(m.business_count, 0) AS businessCount
+        FROM dongcodes d
+        LEFT JOIN dong_commercial_metrics m
+            ON m.dong_code = d.dong_code
+           AND m.category = #{category}
+        WHERE d.dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+        ORDER BY d.dong_code
+    </select>
+</mapper>
