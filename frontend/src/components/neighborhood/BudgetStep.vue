@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   budgetAmount: { type: Number, required: true },
-  dealType:     { type: String, default: '전세' },
+  dealType:     { type: String, default: '매매' },
   housingType:  { type: String, default: '아파트' },
 })
 
@@ -22,6 +22,8 @@ const budget = computed({
 
 const budgetLabel = computed(() => (budget.value >= 10 ? '10억 이상' : `${budget.value}억원 이하`))
 
+// 선택지는 화면에 모두 유지한다. 현재 추천 SQL은 예산만 필터링하며,
+// 거래 유형·주거 형태별 원천 데이터가 준비되면 이 선택값을 그대로 필터 조건에 연결한다.
 const dealOptions = ['매매', '전세', '월세']
 const housingOptions = [
   { value: '아파트',   icon: '🏢', label: '아파트' },
@@ -36,6 +38,7 @@ const housingOptions = [
       <span class="budget-icon" aria-hidden="true">▣</span>
       <h2>예산 및 거래 유형</h2>
     </div>
+
 
     <!-- 예산 슬라이더 -->
     <div class="budget-section">

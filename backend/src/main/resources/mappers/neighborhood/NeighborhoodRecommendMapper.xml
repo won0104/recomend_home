@@ -46,6 +46,8 @@
                 AVG(CAST(hi.latitude  AS DECIMAL(12, 8)))         AS dong_lat,
                 AVG(CAST(hi.longitude AS DECIMAL(12, 8)))         AS dong_lng
             FROM houseinfos hi
+            <!-- 점수 계산에 사용할 법정동 코드가 있는 아파트만 후보 위치 계산에 사용한다. -->
+            JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
             WHERE hi.latitude  IS NOT NULL AND hi.latitude  != ''
               AND hi.longitude IS NOT NULL AND hi.longitude != ''
             GROUP BY CONCAT(hi.sgg_cd, hi.umd_cd)
@@ -83,14 +85,25 @@
                 COS(RADIANS(dg.dong_lng) - RADIANS(#{originLng})) +
                 SIN(RADIANS(#{originLat})) * SIN(RADIANS(dg.dong_lat))
             )))) &lt;= #{radiusKm}
-        <if test="maxPrice != null">
-            AND dg.legal_dong_code IN (
-                SELECT DISTINCT CONCAT(hi2.sgg_cd, hi2.umd_cd)
-                FROM housedeals hd
-                JOIN houseinfos hi2 ON hd.apt_seq = hi2.apt_seq
-                WHERE CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
+            <!--
+                기본 예산 정책은 반경 안에 들어온 동에 대해서만 확인한다.
+                기존처럼 housedeals 전체를 먼저 JOIN하면 대량 거래 데이터 때문에 요청이 오래 걸릴 수 있다.
+                따라서 후보 동 하나의 거래만 apt_seq 인덱스로 확인하는 EXISTS 구조를 사용한다.
+            -->
+            AND EXISTS (
+                SELECT 1
+                FROM houseinfos price_hi
+                JOIN housedeals price_hd ON price_hd.apt_seq = price_hi.apt_seq
+                WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
+                GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
+                HAVING COUNT(price_hd.no) >= 5
+                <if test="maxPrice != null">
+                    AND SUM(CASE
+                        WHEN CAST(REPLACE(COALESCE(price_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
+                        THEN 1 ELSE 0
+                    END) / COUNT(price_hd.no) &gt;= 0.60
+                </if>
             )
-        </if>
         ORDER BY dg.legal_dong_code
     </select>
 

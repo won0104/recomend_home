@@ -20,8 +20,11 @@ public class HouseInfoServiceImpl implements HouseInfoService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<HouseInfo> search(String sigunguCode, String dongName, String keyword) throws Exception {
-        return houseInfoMapper.search(sigunguCode, dongName, keyword);
+    public List<HouseInfo> search(String sigunguCode, String dongName, String keyword,
+            Integer maxPrice, String dealType, String housingType) throws Exception {
+        // 거래 유형·주거 형태 버튼은 프론트에서 선택 상태를 유지한다.
+        // 현재 적재된 원천 테이블에는 해당 구분 컬럼이 없어, 상세 조회에서는 예산 조건만 적용한다.
+        return houseInfoMapper.search(sigunguCode, dongName, keyword, maxPrice, dealType, housingType);
     }
 
     @Override
@@ -67,4 +70,5 @@ public class HouseInfoServiceImpl implements HouseInfoService {
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
+
 }

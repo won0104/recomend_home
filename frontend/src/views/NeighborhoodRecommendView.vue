@@ -129,6 +129,10 @@ const recommendationCondition = computed(() => ({
   longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
   maxPrice: maxPrice.value,
+  // 거래·주거 선택값도 요청에 보존한다. 현재 DB 필터는 예산에 적용되고,
+  // 향후 전세·월세·주택 데이터가 추가되면 이 값으로 같은 조건을 연결한다.
+  dealType: dealType.value,
+  housingType: housingType.value,
   priorities: selectedLifestyleIds.value,
   lifestyleMood: lifestyleMood.value,
 }))
@@ -151,7 +155,13 @@ async function openDetail(rec) {
   pinnedAptSeq.value = null
   highlightedAptSeq.value = null
   try {
-    const res = await fetchHouses({ lawdCd: rec.lawdCd })
+    // 동네 후보를 걸러낸 예산·거래·주거 조건을 매물 목록에도 그대로 적용한다.
+    const res = await fetchHouses({
+      lawdCd: rec.lawdCd,
+      maxPrice: maxPrice.value,
+      dealType: dealType.value,
+      housingType: housingType.value,
+    })
     houseList.value = Array.isArray(res.data) ? res.data : []
   } catch {
     houseList.value = []
