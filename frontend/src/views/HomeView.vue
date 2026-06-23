@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import api from '../api/client'
-import { fetchCommercialCategories, fetchCommercialSubcategories, searchCommercials } from '../api/commercials'
 import { fetchFavorites } from '../api/favorites'
 import { fetchEmdList, fetchSidoList, fetchSigunguList } from '../api/regions'
 import { number } from '../utils/format'
@@ -27,37 +26,14 @@ const search = ref({
   sortBy: 'latest'
 })
 const results = ref([])
-const commercials = ref([])
+const stats = ref({ totalCount: 0, dealCount: 0, rentCount: 0, avgDealAmount: 0 })
 const favorites = ref([])
 const sidoList = ref([])
 const sigunguList = ref([])
 const emdList = ref([])
-const commercial = ref({
-  sido: '',
-  sigungu: '',
-  lawdCd: '',
-  dong: '',
-  categoryL: '',
-  categoryM: '',
-  keyword: ''
-})
-const commercialSigunguList = ref([])
-const commercialCategoryLList = ref([])
-const commercialCategoryMList = ref([])
-const commercialError = ref('')
-const commercialLoading = ref(false)
-const commercialSearched = ref(false)
 const statusMessage = ref('')
 const loading = ref(false)
 
-const stats = computed(() => {
-  const total = results.value.length
-  const deal = results.value.filter((item) => item.contractType === 'deal' || item.type === 'deal').length
-  const rent = total - deal
-  const amounts = results.value.map((item) => Number(item.amount || item.dealAmount || 0)).filter(Number.isFinite)
-  const avgDeal = amounts.length ? Math.round(amounts.reduce((a, b) => a + b, 0) / amounts.length) : 0
-  return { total, deal, rent, avgDeal }
-})
 const selectedRegionText = computed(() => {
   const sido = sidoList.value.find((item) => item.code === search.value.sido)?.name
   const sigungu = sigunguList.value.find((item) => item.code === search.value.sigungu)?.name
@@ -67,21 +43,34 @@ const selectedRegionText = computed(() => {
 async function runSearch() {
   loading.value = true
   statusMessage.value = ''
+  const params = {
+    lawdCd: search.value.lawdCode || undefined,
+    dealYmd: search.value.dealYmd || undefined,
+    housingType: search.value.housingType,
+    contractType: search.value.contractType
+  }
   try {
-    const response = await api.get('/properties/search', {
-      params: {
-        lawdCd: search.value.lawdCode || undefined,
-        dealYmd: search.value.dealYmd || undefined,
-        housingType: search.value.housingType,
-        contractType: search.value.contractType
-      }
-    })
+    const [response, summaryResponse] = await Promise.all([
+      api.get('/properties/search', { params }),
+      api.get('/properties/summary', { params })
+    ])
     results.value = Array.isArray(response.data.data) ? response.data.data : []
+    stats.value = summaryResponse.data.data || stats.value
   } catch {
     results.value = []
     statusMessage.value = '거래 검색 API 응답을 불러오지 못했습니다.'
   } finally {
     loading.value = false
+  }
+}
+
+// 첫 화면의 카드에는 전체 거래 통계만 표시한다. 상세 목록과 지도는 사용자가 검색할 때만 불러온다.
+async function loadInitialSummary() {
+  try {
+    const response = await api.get('/properties/summary')
+    stats.value = response.data.data || stats.value
+  } catch {
+    // 통계 조회가 실패해도 화면 검색 기능은 계속 사용할 수 있게 기본 0값을 유지한다.
   }
 }
 
@@ -132,56 +121,6 @@ async function loadEmdOptions() {
   }
 }
 
-async function loadCommercialSigunguOptions() {
-  commercialSigunguList.value = await fetchSigunguList(commercial.value.sido)
-  commercial.value.sigungu = ''
-  commercial.value.lawdCd = ''
-}
-
-function onCommercialSigunguChange() {
-  if (/^\d{5}/.test(commercial.value.sigungu)) {
-    commercial.value.lawdCd = commercial.value.sigungu.slice(0, 5)
-  }
-}
-
-async function loadCommercialCategories() {
-  if (commercialCategoryLList.value.length) return
-  try {
-    commercialCategoryLList.value = await fetchCommercialCategories()
-  } catch {
-    commercialError.value = '상권 업종 대분류를 불러오지 못했습니다.'
-  }
-}
-
-async function loadCommercialSubcategories() {
-  commercial.value.categoryM = ''
-  commercialCategoryMList.value = await fetchCommercialSubcategories(commercial.value.categoryL)
-}
-
-function useMainRegionForCommercial() {
-  commercial.value.lawdCd = search.value.lawdCode
-  commercial.value.dong = emdList.value.find((item) => item.code === search.value.emd)?.name || ''
-}
-
-async function runCommercialSearch() {
-  commercialError.value = ''
-  commercialSearched.value = true
-  if (!commercial.value.lawdCd && !commercial.value.dong && !commercial.value.categoryL) {
-    commercialError.value = '시군구코드, 법정동, 대분류 중 하나 이상을 지정해주세요. (상호명만으로는 너무 무겁습니다)'
-    commercials.value = []
-    return
-  }
-  commercialLoading.value = true
-  try {
-    commercials.value = await searchCommercials({ ...commercial.value, limit: 200 })
-  } catch (error) {
-    commercialError.value = error?.response?.data?.message || '상가 검색에 실패했습니다.'
-    commercials.value = []
-  } finally {
-    commercialLoading.value = false
-  }
-}
-
 function resetFilters() {
   search.value = {
     housingType: 'all',
@@ -203,7 +142,7 @@ function resetFilters() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSidoOptions(), loadFavorites()])
+  await Promise.all([loadSidoOptions(), loadFavorites(), loadInitialSummary()])
 })
 </script>
 
@@ -214,19 +153,19 @@ onMounted(async () => {
     <section class="grid stat-grid">
       <div class="card stat-card">
         <div class="stat-label">전체 거래 건수</div>
-        <div class="stat-value"><span>{{ number(stats.total) }}</span><span class="stat-unit">건</span></div>
+        <div class="stat-value"><span>{{ number(stats.totalCount) }}</span><span class="stat-unit">건</span></div>
       </div>
       <div class="card stat-card">
         <div class="stat-label">매매 건수</div>
-        <div class="stat-value"><span>{{ number(stats.deal) }}</span><span class="stat-unit">건</span></div>
+        <div class="stat-value"><span>{{ number(stats.dealCount) }}</span><span class="stat-unit">건</span></div>
       </div>
       <div class="card stat-card">
         <div class="stat-label">전월세 건수</div>
-        <div class="stat-value"><span>{{ number(stats.rent) }}</span><span class="stat-unit">건</span></div>
+        <div class="stat-value"><span>{{ number(stats.rentCount) }}</span><span class="stat-unit">건</span></div>
       </div>
       <div class="card stat-card">
         <div class="stat-label">평균 매매가</div>
-        <div class="stat-value"><span>{{ number(stats.avgDeal) }}</span><span class="stat-unit">만원</span></div>
+        <div class="stat-value"><span>{{ number(stats.avgDealAmount) }}</span><span class="stat-unit">만원</span></div>
       </div>
     </section>
 
@@ -283,83 +222,6 @@ onMounted(async () => {
               </div>
             </form>
             <div class="small text-muted helper-text">※ DEAL_YMD는 YYYYMM 형식, LAWD_CD는 시군구 5자리 코드입니다.</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header section-head">
-            <div class="title"><span class="bar"></span><span>주변 상권</span>
-              <span class="badge text-bg-secondary">{{ commercials.length }}건</span>
-            </div>
-          </div>
-          <div class="card-body commercial-form">
-            <div class="grid search-grid">
-              <div class="span-6">
-                <label class="form-label small">시도</label>
-                <select v-model="commercial.sido" class="form-select form-select-sm" @change="loadCommercialSigunguOptions">
-                  <option value="">선택</option>
-                  <option v-for="sido in sidoList" :key="sido.code" :value="sido.code">{{ sido.name }}</option>
-                </select>
-              </div>
-              <div class="span-6">
-                <label class="form-label small">시군구</label>
-                <select v-model="commercial.sigungu" class="form-select form-select-sm" @change="onCommercialSigunguChange">
-                  <option value="">선택</option>
-                  <option v-for="sigungu in commercialSigunguList" :key="sigungu.code" :value="sigungu.code">{{ sigungu.name }}</option>
-                </select>
-              </div>
-              <div class="span-6"><label class="form-label small">시군구코드</label><input v-model="commercial.lawdCd" class="form-control form-control-sm mono" placeholder="예: 11650" /></div>
-              <div class="span-6"><label class="form-label small">법정동</label><input v-model="commercial.dong" class="form-control form-control-sm" placeholder="예: 방배동" /></div>
-              <div class="span-6">
-                <label class="form-label small">대분류</label>
-                <select v-model="commercial.categoryL" class="form-select form-select-sm" @focus="loadCommercialCategories" @mousedown="loadCommercialCategories" @change="loadCommercialSubcategories">
-                  <option value="">{{ commercialCategoryLList.length ? '전체' : '(클릭하여 로드)' }}</option>
-                  <option v-for="category in commercialCategoryLList" :key="category.code" :value="category.code">{{ category.name }}</option>
-                </select>
-              </div>
-              <div class="span-6">
-                <label class="form-label small">중분류</label>
-                <select v-model="commercial.categoryM" class="form-select form-select-sm">
-                  <option value="">대분류 선택 시 로드</option>
-                  <option v-for="category in commercialCategoryMList" :key="category.code" :value="category.code">{{ category.name }}</option>
-                </select>
-              </div>
-              <div class="span-12"><label class="form-label small">상호명</label><input v-model="commercial.keyword" class="form-control form-control-sm" placeholder="예: GS" /></div>
-              <div class="span-12 search-actions">
-                <button class="btn btn-primary btn-sm flex-grow-1" type="button" :disabled="commercialLoading" @click="runCommercialSearch">
-                  {{ commercialLoading ? '검색 중...' : '상가 검색' }}
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" type="button" title="거래 검색 영역의 시군구/읍면동 값 가져오기" @click="useMainRegionForCommercial">위 조건 사용</button>
-              </div>
-            </div>
-          </div>
-          <div class="table-responsive commercial-table">
-            <table class="table table-sm">
-              <thead><tr><th>업종</th><th>상호</th><th>법정동</th></tr></thead>
-              <tbody>
-                <tr v-if="commercialError"><td colspan="3" class="text-center text-danger py-3">{{ commercialError }}</td></tr>
-                <tr v-else-if="commercialLoading"><td colspan="3" class="text-center text-secondary py-3"><span class="spinner-border spinner-border-sm me-2"></span>검색 중...</td></tr>
-                <tr v-else-if="commercials.length === 0">
-                  <td colspan="3" class="empty-state">
-                    {{ commercialSearched ? '검색 결과가 없습니다.' : '검색 조건 입력 후 실행해 주세요.' }}
-                  </td>
-                </tr>
-                <tr v-for="item in commercials" :key="`${item.shopName}-${item.roadAddress}-${item.jibunAddress}`">
-                  <td class="small">
-                    <span class="badge text-bg-light border">{{ item.categoryLName }}</span>
-                    <div class="text-secondary mt-1">{{ [item.categoryMName, item.categorySName].filter(Boolean).join(' › ') }}</div>
-                  </td>
-                  <td>
-                    {{ item.shopName }}
-                    <span v-if="item.branchName" class="text-secondary small">({{ item.branchName }})</span>
-                    <div v-if="item.roadAddress || item.jibunAddress" class="text-secondary small text-truncate" :title="item.roadAddress || item.jibunAddress">
-                      {{ item.roadAddress || item.jibunAddress }}
-                    </div>
-                  </td>
-                  <td class="small">{{ item.beopjeongName }}</td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </div>
 

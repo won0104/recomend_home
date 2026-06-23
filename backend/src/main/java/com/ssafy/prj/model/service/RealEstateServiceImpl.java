@@ -27,18 +27,8 @@ public class RealEstateServiceImpl implements RealEstateService {
     @Override
     @Transactional(readOnly = true)
     public TransactionSummary summarize(SearchCondition condition) throws Exception {
-        List<RealEstateTransaction> transactions = search(condition);
-
-        int dealCount = 0;
-        long sumDealAmount = 0L;
-        for (RealEstateTransaction tx : transactions) {
-            if ("deal".equals(tx.getContractType())) {
-                dealCount++;
-                sumDealAmount += tx.getAmount();
-            }
-        }
-        int avgDealAmount = dealCount == 0 ? 0 : (int) Math.round((double) sumDealAmount / dealCount);
-        int rentCount = transactions.size() - dealCount;
-        return new TransactionSummary(transactions.size(), dealCount, rentCount, avgDealAmount);
+        // search()는 화면 목록 보호를 위해 최대 1,000건만 반환한다.
+        // 첫 화면 통계는 모든 거래를 대상으로 해야 하므로 별도 집계 SQL을 사용한다.
+        return transactionMapper.summarize(condition);
     }
 }

@@ -27,17 +27,22 @@ public class EstateMarketAiTasklet implements Tasklet {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         var ctx = chunkContext.getStepContext().getStepExecution().getJobExecution().getExecutionContext();
-        EstateMarketReport report = (EstateMarketReport) ctx.get(BatchContextKeys.MARKET_REPORT);
-        List<EstateMarketItem> items = (List<EstateMarketItem>) ctx.get(BatchContextKeys.MARKET_ITEMS);
+        String reportId = (String) ctx.get(BatchContextKeys.REPORT_ID);
+
+        // 수천 건의 거래 목록은 ExecutionContext 대신 배치 테이블에서 조회한다.
+        // AI 단계도 reportId 하나만 전달받으므로 메타 테이블 용량 초과가 발생하지 않는다.
+        EstateMarketReport report = estateMarketBatchDao.findReportById(reportId);
+        List<EstateMarketItem> items = estateMarketBatchDao.findItemsByReportId(reportId);
+        if (report == null) {
+            throw new IllegalStateException("AI 요약 대상 리포트를 찾을 수 없습니다. reportId=" + reportId);
+        }
 
         String summary = estateMarketAiService.summarize(report, items);
         report.setAiSummary(summary);
         report.setAiStatus("DONE");
         estateMarketBatchDao.updateAiResult(report);
-        ctx.put(BatchContextKeys.MARKET_REPORT, report);
 
         System.out.println("[EstateBatch-AI] summary updated. reportId=" + report.getReportId());
         return RepeatStatus.FINISHED;

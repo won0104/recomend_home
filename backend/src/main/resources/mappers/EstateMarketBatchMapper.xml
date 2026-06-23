@@ -20,6 +20,21 @@
         <result column="raw_address" property="rawAddress" />
     </resultMap>
 
+    <resultMap id="estateMarketReportMap" type="com.ssafy.prj.batch.domain.EstateMarketReport">
+        <id column="report_id" property="reportId" />
+        <result column="title" property="title" />
+        <result column="lawd_cd" property="lawdCd" />
+        <result column="deal_ymd" property="dealYmd" />
+        <result column="collected_at" property="collectedAt" />
+        <result column="item_count" property="itemCount" />
+        <result column="avg_deal_amount" property="avgDealAmount" />
+        <result column="max_deal_amount" property="maxDealAmount" />
+        <result column="min_deal_amount" property="minDealAmount" />
+        <result column="ai_summary" property="aiSummary" />
+        <result column="ai_status" property="aiStatus" />
+        <result column="pdf_path" property="pdfPath" />
+    </resultMap>
+
     <update id="createReportTable">
         CREATE TABLE IF NOT EXISTS batch_estate_market_reports (
             report_id VARCHAR(40) PRIMARY KEY,
@@ -37,6 +52,43 @@
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
+    </update>
+
+    <update id="createHouseInfoTable">
+        CREATE TABLE IF NOT EXISTS houseinfos (
+            apt_seq VARCHAR(20) NOT NULL COMMENT '아파트코드',
+            sgg_cd VARCHAR(5) NULL COMMENT '시군구코드',
+            umd_cd VARCHAR(5) NULL COMMENT '읍면동코드',
+            umd_nm VARCHAR(20) NULL COMMENT '읍면동이름',
+            jibun VARCHAR(10) NULL COMMENT '지번',
+            road_nm_sgg_cd VARCHAR(5) NULL COMMENT '도로명시군구코드',
+            road_nm VARCHAR(20) NULL COMMENT '도로명',
+            road_nm_bonbun VARCHAR(10) NULL COMMENT '도로명기초번호',
+            road_nm_bubun VARCHAR(10) NULL COMMENT '도로명추가번호',
+            apt_nm VARCHAR(40) NULL COMMENT '아파트이름',
+            build_year INT NULL COMMENT '준공년도',
+            latitude VARCHAR(45) NULL COMMENT '위도',
+            longitude VARCHAR(45) NULL COMMENT '경도',
+            PRIMARY KEY (apt_seq)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    </update>
+
+    <update id="createHouseDealsTable">
+        CREATE TABLE IF NOT EXISTS housedeals (
+            no INT NOT NULL AUTO_INCREMENT COMMENT '거래번호',
+            apt_seq VARCHAR(20) NULL COMMENT '아파트코드',
+            apt_dong VARCHAR(40) NULL COMMENT '아파트동',
+            floor VARCHAR(3) NULL COMMENT '아파트층',
+            deal_year INT NULL COMMENT '거래년도',
+            deal_month INT NULL COMMENT '거래월',
+            deal_day INT NULL COMMENT '거래일',
+            exclu_use_ar DECIMAL(7, 2) NULL COMMENT '아파트면적',
+            deal_amount VARCHAR(10) NULL COMMENT '거래가격',
+            PRIMARY KEY (no),
+            INDEX idx_housedeals_apt_seq (apt_seq),
+            CONSTRAINT fk_housedeals_houseinfos
+                FOREIGN KEY (apt_seq) REFERENCES houseinfos (apt_seq)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     </update>
 
     <update id="widenReportDealYmdColumn">
@@ -87,6 +139,27 @@
              #{item.rawAddress})
         </foreach>
     </insert>
+
+    <!--
+        Spring Batch ExecutionContext에는 reportId 문자열만 보관한다.
+        수천 건의 거래 목록을 ExecutionContext에 넣으면 BATCH_JOB_EXECUTION_CONTEXT의
+        SERIALIZED_CONTEXT 컬럼 용량을 초과하므로, 다음 단계는 이 조회로 원본 데이터를 다시 읽는다.
+    -->
+    <select id="findReportById" resultMap="estateMarketReportMap">
+        SELECT report_id, title, lawd_cd, deal_ymd, collected_at, item_count,
+               avg_deal_amount, max_deal_amount, min_deal_amount,
+               ai_summary, ai_status, pdf_path
+        FROM batch_estate_market_reports
+        WHERE report_id = #{reportId}
+    </select>
+
+    <select id="findItemsByReportId" resultMap="estateMarketItemMap">
+        SELECT report_id, source_type, lawd_cd, deal_ymd, apt_name, dong, jibun,
+               deal_amount, area, floor, build_year, deal_date, raw_address
+        FROM batch_estate_market_items
+        WHERE report_id = #{reportId}
+        ORDER BY id
+    </select>
 
     <insert id="upsertHouseInfos">
         INSERT INTO houseinfos
@@ -158,6 +231,63 @@
           )
     </insert>
 
+    <!--
+        국토부 법정동명과 dongcodes의 동 이름을 공백을 무시하고 다시 맞춰 umd_cd를 보정한다.
+        적재 시점에 00000이 들어간 경우에도, 이번 리포트의 아파트는 올바른 10자리 법정동 코드와
+        연결된다. 이후 추천 후보·학교·공원 점수 조회가 같은 dong_code를 사용할 수 있다.
+    -->
+    <update id="normalizeLegalDongCodesForReport">
+        UPDATE houseinfos hi
+        JOIN (
+            SELECT DISTINCT
+                CONCAT('BT', item.lawd_cd, '-', SUBSTRING(MD5(CONCAT_WS('|',
+                    item.lawd_cd, item.dong, item.jibun, item.apt_name
+                )), 1, 10)) AS apt_seq
+            FROM batch_estate_market_items item
+            WHERE item.report_id = #{reportId}
+        ) report_item ON report_item.apt_seq = hi.apt_seq
+        JOIN dongcodes dc ON dc.dong_code LIKE CONCAT(hi.sgg_cd, '%')
+            AND REPLACE(dc.dong_name, ' ', '') = REPLACE(hi.umd_nm, ' ', '')
+        SET hi.umd_cd = SUBSTRING(dc.dong_code, 6, 5)
+        WHERE hi.umd_cd IS NULL OR hi.umd_cd = '' OR hi.umd_cd = '00000'
+    </update>
+
+    <!--
+        이번 배치가 만든 아파트 중 좌표가 비어 있는 apt_seq만 고른다.
+        거래 행은 여러 개일 수 있으므로 DISTINCT로 제거해 같은 아파트에 대해 카카오 API를 한 번만 호출한다.
+        주소는 dongcodes의 시·군·구명과 아파트의 법정동·지번을 조합해 지번 주소로 만든다.
+    -->
+    <select id="findMissingCoordinateTargetsByReportId"
+            resultType="com.ssafy.prj.batch.domain.HouseCoordinateTarget">
+        SELECT DISTINCT
+            hi.apt_seq AS aptSeq,
+            TRIM(CONCAT_WS(' ', dc.sido_name, dc.gugun_name, hi.umd_nm, hi.jibun)) AS address
+        FROM batch_estate_market_items item
+        JOIN houseinfos hi ON hi.apt_seq = CONCAT('BT', item.lawd_cd, '-', SUBSTRING(MD5(CONCAT_WS('|',
+            item.lawd_cd, item.dong, item.jibun, item.apt_name
+        )), 1, 10))
+        /*
+            좌표 보강 주소에는 시·군·구명만 필요하다. 법정동 코드가 아직 00000인 행도
+            주소 검색 대상에서 빠지지 않도록, 시군구 대표 행(예: 1111000000)을 조인한다.
+        */
+        JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, '00000')
+        WHERE item.report_id = #{reportId}
+          AND (hi.latitude IS NULL OR hi.latitude = '' OR hi.longitude IS NULL OR hi.longitude = '')
+          AND hi.jibun IS NOT NULL
+          AND hi.jibun != ''
+          <!-- 시군구 대표 행을 조인하므로 dong_name은 NULL이다. 시군구명만 있으면 주소 구성에는 충분하다. -->
+          AND dc.gugun_name IS NOT NULL
+        ORDER BY hi.apt_seq
+    </select>
+
+    <!-- 성공한 좌표만 갱신한다. 좌표가 이미 저장된 아파트는 위 대상 조회에서 제외된다. -->
+    <update id="updateHouseCoordinates">
+        UPDATE houseinfos
+        SET latitude = #{latitude},
+            longitude = #{longitude}
+        WHERE apt_seq = #{aptSeq}
+    </update>
+
     <update id="updateAiResult" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
         UPDATE batch_estate_market_reports
         SET ai_summary = #{aiSummary},
@@ -175,6 +305,16 @@
         SELECT DISTINCT SUBSTRING(dong_code, 1, 5) AS lawd_cd
         FROM dongcodes
         WHERE dong_code IS NOT NULL
+          AND LENGTH(dong_code) &gt;= 5
+        ORDER BY lawd_cd
+    </select>
+
+    <select id="selectLawdCodesBySido" resultType="string">
+        SELECT DISTINCT SUBSTRING(dong_code, 1, 5) AS lawd_cd
+        FROM dongcodes
+        WHERE sido_name = #{sidoName}
+          AND gugun_name IS NOT NULL
+          AND dong_code IS NOT NULL
           AND LENGTH(dong_code) &gt;= 5
         ORDER BY lawd_cd
     </select>

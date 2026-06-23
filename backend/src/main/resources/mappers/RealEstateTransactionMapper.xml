@@ -83,4 +83,38 @@
         ORDER BY hd.deal_year DESC, hd.deal_month DESC, hd.deal_day DESC, hd.no DESC
         LIMIT 1000
     </select>
+
+    <!--
+        상단 카드용 전체 통계 쿼리다. 화면 목록 쿼리와 같은 조건을 적용하지만 LIMIT를 두지 않는다.
+        현재 원천 테이블은 매매(housedeals)만 보관하므로 전월세 건수는 0으로 반환한다.
+    -->
+    <select id="summarize" parameterType="SearchCondition" resultType="TransactionSummary">
+        <bind name="dealYear" value="dealYmd != null and dealYmd.trim().length() &gt;= 4 ? dealYmd.trim().substring(0, 4) : null" />
+        <bind name="dealMonth" value="dealYmd != null and dealYmd.trim().length() &gt;= 6 ? dealYmd.trim().substring(4, 6) : null" />
+        SELECT
+            COUNT(*) AS total_count,
+            COUNT(*) AS deal_count,
+            0 AS rent_count,
+            COALESCE(ROUND(AVG(CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED))), 0) AS avg_deal_amount
+        FROM housedeals hd
+        JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
+        <where>
+            <if test="dealYear != null">
+                AND hd.deal_year = CAST(#{dealYear} AS UNSIGNED)
+            </if>
+            <if test="dealMonth != null">
+                AND hd.deal_month = CAST(#{dealMonth} AS UNSIGNED)
+            </if>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND hi.sgg_cd = #{lawdCd}
+            </if>
+            <if test="dong != null and dong.trim() != ''">
+                AND hi.umd_nm LIKE CONCAT('%', #{dong}, '%')
+            </if>
+            <if test="keyword != null and keyword.trim() != ''">
+                AND (hi.apt_nm LIKE CONCAT('%', #{keyword}, '%')
+                     OR hi.umd_nm LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
 </mapper>
