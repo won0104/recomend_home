@@ -36,4 +36,22 @@
         </if>
         ORDER BY c.legal_dong_code
     </select>
+
+    <!--
+        점수 계산으로 선정된 법정동 코드에 지역명을 붙인다.
+        dongcodes가 지역명의 기준 테이블이므로 학교·공원·상권 테이블을 다시 조인할 필요가 없다.
+    -->
+    <select id="findNeighborhoodsByDongCodes"
+            resultType="com.ssafy.prj.model.dto.neighborhood.RecommendedNeighborhood">
+        SELECT
+            dong_code AS lawdCd,
+            sido_name AS sidoName,
+            gugun_name AS sigunguName,
+            dong_name AS dongName
+        FROM dongcodes
+        WHERE dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+    </select>
 </mapper>

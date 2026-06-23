@@ -33,6 +33,18 @@ public class NeighborhoodRecommendationServiceImpl implements NeighborhoodRecomm
         List<String> dongCodes,
         List<SurveyCategory> priorities
     ) {
+        return recommendWithDetails(dongCodes, priorities).recommendations();
+    }
+
+    /**
+     * 최종 순위를 만들 때 사용한 카테고리별 점수표도 함께 보존한다.
+     * 이 값은 추천 결과 설명 및 서버 로그에서만 사용하며, 점수 계산 규칙은 기존 recommend와 같다.
+     */
+    @Override
+    public NeighborhoodRecommendationResult recommendWithDetails(
+        List<String> dongCodes,
+        List<SurveyCategory> priorities
+    ) {
         validateRequest(dongCodes, priorities);
 
         Map<SurveyCategory, Map<String, Double>> scoresByCategory =
@@ -46,7 +58,11 @@ public class NeighborhoodRecommendationServiceImpl implements NeighborhoodRecomm
             priorities,
             scoresByCategory
         );
-        return selectTopRecommendations(totalScores);
+        return new NeighborhoodRecommendationResult(
+            selectTopRecommendations(totalScores),
+            scoresByCategory,
+            PRIORITY_WEIGHTS
+        );
     }
 
     private Map<String, Double> getCategoryScores(

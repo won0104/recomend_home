@@ -17,12 +17,15 @@ const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
 
 const lifestyleOptions = [
-  { id: 'cafe', icon: '☕', title: '카페·외식' },
-  { id: 'health', icon: '⌁', title: '운동·여가' },
-  { id: 'market', icon: '🛒', title: '장보기·생활편의' },
-  { id: 'school', icon: '▱', title: '학교·교육' },
-  { id: 'park', icon: '♣', title: '공원·산책' },
-  { id: 'culture', icon: '□', title: '문화생활' }
+  // id는 백엔드 SurveyCategory enum 이름과 동일해야 한다.
+  // 이 값을 그대로 전송하면 별도의 화면용 코드 변환 없이 점수 계산기로 연결된다.
+  { id: 'CAFE', icon: '☕', title: '카페·외식' },
+  { id: 'CULTURE', icon: '⌁', title: '운동·문화' },
+  { id: 'SHOPPING', icon: '🛒', title: '장보기·생활편의' },
+  { id: 'SCHOOL', icon: '▱', title: '학교·교육' },
+  { id: 'PARK', icon: '♣', title: '공원·산책' },
+  { id: 'MEDICAL', icon: '⚕', title: '의료' },
+  { id: 'PET', icon: '🐾', title: '반려인' }
 ]
 
 const currentStep = computed(() => {
@@ -38,7 +41,8 @@ const recommendationCondition = computed(() => ({
   longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
   maxPrice: maxPrice.value,
-  priorities: selectedLifestyleIds.value.map((category) => category.toUpperCase()),
+  // id가 SurveyCategory 이름과 같으므로 선택 순서도 그대로 백엔드 1·2·3순위가 된다.
+  priorities: selectedLifestyleIds.value,
   lifestyleMood: lifestyleMood.value
 }))
 
@@ -72,11 +76,28 @@ function backToBudgetStep() {
 }
 
 async function submitRecommendation() {
+  // 백엔드 점수 서비스는 1·2·3순위 가중치를 적용하므로 정확히 3개를 선택해야 한다.
+  if (selectedLifestyleIds.value.length !== 3) {
+    alert('생활 우선순위를 정확히 3개 선택해주세요.')
+    return
+  }
+
   recommendLoading.value = true
 
   try {
-    // 백엔드는 반경/예산으로 매매 후보를 걸러내고, 다음 추천 로직에 필요한 법정동 후보를 함께 내려줍니다.
-    await recommendNeighborhood(recommendationCondition.value)
+    // 응답의 data.recommendations에는 코드·지역명·점수·순위가 담긴 최종 상위 3개가 들어 있다.
+    const response = await recommendNeighborhood(recommendationCondition.value)
+    const recommendations = response?.data?.recommendations ?? []
+
+    // 결과 화면을 붙이기 전에도 브라우저 개발자 도구에서 추천 결과를 즉시 확인할 수 있게 출력한다.
+    console.table(recommendations.map((recommendation) => ({
+      rank: recommendation.rank,
+      dongCode: recommendation.lawdCd,
+      name: [recommendation.sidoName, recommendation.sigunguName, recommendation.dongName]
+        .filter(Boolean)
+        .join(' '),
+      score: recommendation.score
+    })))
   } catch (error) {
     console.error(error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.')
   } finally {

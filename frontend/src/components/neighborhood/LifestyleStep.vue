@@ -64,6 +64,11 @@ function lifestyleRank(id) {
     </aside>
 
     <section class="lifestyle-main">
+      <!--
+        선택지 목록은 이 컴포넌트에 고정하지 않고 부모 View에서 받는다.
+        현재는 카페·외식, 운동·문화, 장보기·생활편의, 학교·교육, 공원·산책, 의료, 반려인의 7개다.
+        v-for를 사용하므로 부모 목록에 7개가 전달되면 화면도 자동으로 7개를 렌더링한다.
+      -->
       <div class="lifestyle-grid">
         <button
           v-for="option in lifestyleOptions"
