@@ -6,6 +6,7 @@ import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
 import { recommendNeighborhood } from '../api/neighborhoods'
+import NeighborhoodChatBot from '../chat/NeighborhoodChatBot.vue'
 
 const selectedPlace = ref(null)
 const screen = ref('search')
@@ -142,4 +143,5 @@ async function submitRecommendation() {
       </section>
     </template>
   </main>
+  <NeighborhoodChatBot />
 </template>
