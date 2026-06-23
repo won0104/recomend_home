@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodCommercialCount;
 import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
 import com.ssafy.prj.model.service.neighborhood.score.RelativeScorePolicy;
+import com.ssafy.prj.model.service.neighborhood.SurveyCategory;
 
 /**
  * {@link CommercialScoreCalculator}가 상권 업소 수를 상대 점수로 바꾸는지만 검증하는 단위 테스트다.
@@ -69,6 +70,36 @@ class CommercialScoreCalculatorTest {
 
         //    업소 수가 0이면 상대 순위와 관계없이 0점이어야 한다.
         assertThat(scores).containsEntry("1135010300", 0.0);
+    }
+
+    @Test
+    void 운동문화_계산기는_R1_배치_통계인_CULTURE_SPORTS를_조회한다() {
+        // 운동·문화도 공용 상대평가 로직을 쓰되, DB에서 읽는 통계 category만 다르다.
+        CultureSportsScoreCalculator cultureCalculator = new CultureSportsScoreCalculator(
+            commercialMetricMapper,
+            new RelativeScorePolicy()
+        );
+        List<String> dongCodes = List.of("1111010100");
+        when(commercialMetricMapper.countByDongCodes(dongCodes, "CULTURE_SPORTS"))
+            .thenReturn(List.of(commercialCount("1111010100", 12)));
+
+        assertThat(cultureCalculator.category()).isEqualTo(SurveyCategory.CULTURE);
+        assertThat(cultureCalculator.calculateScores(dongCodes)).containsEntry("1111010100", 100.0);
+    }
+
+    @Test
+    void 의료_계산기는_Q1_배치_통계인_MEDICAL을_조회한다() {
+        // 의료 역시 카페·외식과 동일한 흐름을 재사용하며, SurveyCategory와 DB category만 다르다.
+        MedicalScoreCalculator medicalCalculator = new MedicalScoreCalculator(
+            commercialMetricMapper,
+            new RelativeScorePolicy()
+        );
+        List<String> dongCodes = List.of("1111010100");
+        when(commercialMetricMapper.countByDongCodes(dongCodes, "MEDICAL"))
+            .thenReturn(List.of(commercialCount("1111010100", 8)));
+
+        assertThat(medicalCalculator.category()).isEqualTo(SurveyCategory.MEDICAL);
+        assertThat(medicalCalculator.calculateScores(dongCodes)).containsEntry("1111010100", 100.0);
     }
 
     /**
