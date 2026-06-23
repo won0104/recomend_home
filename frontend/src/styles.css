@@ -18,23 +18,23 @@
   --text-muted: #5a6478;
   --text-soft: #8993a4;
 
-  --primary: #0b3a6f;
-  --primary-hover: #082c54;
-  --primary-soft: #e6edf5;
+  --primary: #079455;
+  --primary-hover: #067647;
+  --primary-soft: #ecfdf3;
   --primary-ink: #ffffff;
 
   --accent: #c84a31;          /* 도장/강조 (가입, 삭제, 경고 등) */
   --accent-soft: #fbe8e2;
 
-  --success: #1f7a4c;
-  --success-soft: #e3f3eb;
+  --success: #166534;
+  --success-soft: #dcfce7;
   --warning: #b76e00;
   --warning-soft: #fcf0d9;
   --danger:  #b3261e;
   --danger-soft: #f8e0de;
 
-  --info-bar: #082c54;        /* 상단 검정 띠 (정부 사이트 톤) */
-  --info-bar-text: #d6dde8;
+  --info-bar: #054f31;        /* 상단 띠 (짙은 그린) */
+  --info-bar-text: #a7f3d0;
 
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
   --shadow:    0 2px 8px rgba(16, 24, 40, 0.06);
@@ -398,7 +398,7 @@ main.container, .page-container {
   border-color: var(--success);
   color: #fff;
 }
-.btn-success:hover { background: #195e3a; border-color: #195e3a; color:#fff; }
+.btn-success:hover { background: #14532d; border-color: #14532d; color:#fff; }
 
 .btn-danger {
   background: var(--danger);
@@ -609,7 +609,7 @@ main.container, .page-container {
 .alert-warning { background: var(--warning-soft); border-color: #e8c781; color: #6b3f00; }
 .alert-danger  { background: var(--danger-soft);  border-color: #e6b1ad; color: #6b1a14; }
 .alert-success { background: var(--success-soft); border-color: #aed4bf; color: #154f33; }
-.alert-info    { background: var(--primary-soft); border-color: #c0d0e2; color: var(--primary-hover); }
+.alert-info    { background: var(--primary-soft); border-color: #6ee7b7; color: var(--primary-hover); }
 
 /* ===== Helpers ===== */
 .text-secondary { color: var(--text-muted) !important; }
@@ -664,8 +664,8 @@ main.container, .page-container {
   overflow: hidden;
   background:
     linear-gradient(135deg, #eaeef5 0%, #dde4ee 100%),
-    repeating-linear-gradient(0deg, transparent 0 39px, rgba(11,58,111,.05) 39px 40px),
-    repeating-linear-gradient(90deg, transparent 0 39px, rgba(11,58,111,.05) 39px 40px);
+    repeating-linear-gradient(0deg, transparent 0 39px, rgba(7,148,85,.05) 39px 40px),
+    repeating-linear-gradient(90deg, transparent 0 39px, rgba(7,148,85,.05) 39px 40px);
   background-blend-mode: normal, multiply, multiply;
   border: 1px solid var(--border);
 }
@@ -1452,21 +1452,19 @@ dl.row dd {
   accent-color: #079455;
 }
 .radius-marks {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  height: 18px;
   margin-top: 7px;
   color: var(--text-muted);
   font-size: 12px;
 }
-.radius-marks span:nth-child(3) {
-  color: var(--text);
-  font-weight: 900;
-  text-align: center;
+.radius-marks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
-.radius-marks span:nth-child(2),
-.radius-marks span:nth-child(4) {
-  text-align: center;
-}
+.radius-marks span:first-child { transform: none; }
+.radius-marks span:last-child  { transform: translateX(-100%); }
 .condition-example {
   margin: 24px 0;
   color: var(--text-muted);
@@ -1527,19 +1525,19 @@ dl.row dd {
   margin-top: 6px;
 }
 .budget-marks {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  height: 18px;
   margin-top: 10px;
   color: var(--text-muted);
   font-size: 12px;
 }
-.budget-marks span:nth-child(2),
-.budget-marks span:nth-child(3) {
-  text-align: center;
+.budget-marks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
-.budget-marks span:nth-child(4) {
-  text-align: right;
-}
+.budget-marks span:first-child { transform: none; }
+.budget-marks span:last-child  { transform: translateX(-100%); }
 .budget-label {
   display: block;
   margin-bottom: 12px;
@@ -2091,7 +2089,7 @@ dl.row dd {
   color: #fff;
   writing-mode: horizontal-tb;
 }
-.nr-card--rank1 .nr-card__rank { background: #4F6AF5; }
+.nr-card--rank1 .nr-card__rank { background: #079455; }
 .nr-card--rank2 .nr-card__rank { background: #22C55E; }
 .nr-card--rank3 .nr-card__rank { background: #F97316; }
 
@@ -2171,7 +2169,7 @@ dl.row dd {
   border: 3px solid currentColor;
   aspect-ratio: 1;
 }
-.nr-card__score-circle--rank1 { color: #4F6AF5; }
+.nr-card__score-circle--rank1 { color: #079455; }
 .nr-card__score-circle--rank2 { color: #22C55E; }
 .nr-card__score-circle--rank3 { color: #F97316; }
 .nr-card__score-num {
@@ -2394,9 +2392,39 @@ dl.row dd {
 
 .nr-detail-score-item__desc { font-size: 12px; color: var(--text-secondary, #777); margin: 0; }
 
-/* 오른쪽: 매물 목록 */
+/* 오른쪽: 지도 + 매물 목록 */
 .nr-detail-right {
-  background: var(--card-bg, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 지도 카드 */
+.nr-detail-map-card {
+  position: sticky;
+  top: 80px;
+  height: 340px;
+  flex-shrink: 0;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  z-index: 1;
+}
+.nr-detail-mapbox {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.nr-detail-mapbox__map {
+  width: 100%;
+  height: 100%;
+}
+
+/* 매물 목록 카드 */
+.nr-detail-house-card {
+  background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 16px;
   padding: 24px;
@@ -2408,10 +2436,16 @@ dl.row dd {
   padding: 32px 0;
   font-size: 14px;
 }
-.nr-detail-house-table-wrap { overflow-x: auto; }
+.nr-detail-house-table-wrap {
+  overflow-x: auto;
+  max-height: 480px;
+  overflow-y: auto;
+}
 .nr-detail-house-table { margin: 0; font-size: 14px; }
+.nr-detail-row--active td { background: #ecfdf3 !important; }
 
 /* 반응형 */
 @media (max-width: 860px) {
   .nr-detail-body { grid-template-columns: 1fr; }
+  .nr-detail-map-card { position: static; height: 260px; }
 }

@@ -41,11 +41,12 @@ const budgetLabel = computed(() => (budget.value >= 10 ? '10억 이상' : `${bud
         step="0.5"
         aria-label="예산 범위"
       />
+      <!-- 각 left% = (값 - 0.5) / (10 - 0.5) * 100 -->
       <div class="budget-marks" aria-hidden="true">
-        <span>5천만원</span>
-        <span>2억</span>
-        <span>5억</span>
-        <span>10억 이상</span>
+        <span style="left: 0%">5천만원</span>
+        <span style="left: 15.8%">2억</span>
+        <span style="left: 47.4%">5억</span>
+        <span style="left: 100%">10억 이상</span>
       </div>
     </div>
 

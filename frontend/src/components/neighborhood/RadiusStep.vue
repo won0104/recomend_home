@@ -51,11 +51,12 @@ const radius = computed({
         step="5"
         aria-label="최대 반경 거리"
       />
+      <!-- 각 left% = (값 - min) / (max - min) * 100 -->
       <div class="radius-marks" aria-hidden="true">
-        <span>5km</span>
-        <span>15km</span>
-        <span>30km</span>
-        <span>50km</span>
+        <span style="left: 0%">5km</span>
+        <span style="left: 22.2%">15km</span>
+        <span style="left: 55.6%">30km</span>
+        <span style="left: 100%">50km</span>
       </div>
     </div>
 

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import BudgetStep from '../components/neighborhood/BudgetStep.vue'
 import LifestyleStep from '../components/neighborhood/LifestyleStep.vue'
+import NeighborhoodDetailMap from '../components/neighborhood/NeighborhoodDetailMap.vue'
 import NeighborhoodResultMap from '../components/neighborhood/NeighborhoodResultMap.vue'
 import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
@@ -25,6 +26,7 @@ const recommendations = ref([])
 const selectedNeighborhood = ref(null)
 const houseList = ref([])
 const houseLoading = ref(false)
+const highlightedAptSeq = ref(null)
 
 const lifestyleOptions = [
   { id: 'CAFE',     icon: '☕', title: '카페·외식' },
@@ -73,7 +75,7 @@ function getWeaknessTags(categoryScores) {
   return categoryScores.filter((cs) => cs.score < 40).map((cs) => weaknessLabel[cs.category] ?? cs.category)
 }
 
-const RANK_COLORS = { 1: '#4F6AF5', 2: '#22C55E', 3: '#F97316' }
+const RANK_COLORS = { 1: '#079455', 2: '#22C55E', 3: '#F97316' }
 
 const currentStep = computed(() => {
   if (screen.value === 'budget') return 2
@@ -290,52 +292,72 @@ async function submitRecommendation() {
             </ul>
           </section>
 
-          <!-- 오른쪽: 매물 목록 (HouseListView 테이블 재사용) -->
+          <!-- 오른쪽: 지도 + 매물 목록 -->
           <section class="nr-detail-right">
-            <h3 class="nr-detail-section-title">
-              이 동네 매물
-              <span class="nr-detail-house-count">{{ houseList.length }}건</span>
-            </h3>
 
-            <div v-if="houseLoading" class="nr-detail-loading">매물 불러오는 중...</div>
-
-            <div v-else-if="houseList.length === 0" class="nr-detail-empty">
-              등록된 매물이 없습니다.
+            <!-- 지도 -->
+            <div class="nr-detail-map-card">
+              <NeighborhoodDetailMap
+                :houses="houseList"
+                :dong-address="[selectedNeighborhood.sidoName, selectedNeighborhood.sigunguName, selectedNeighborhood.dongName].filter(Boolean).join(' ')"
+                :highlighted-apt-seq="highlightedAptSeq"
+                @select="(seq) => highlightedAptSeq = seq"
+              />
             </div>
 
-            <div v-else class="nr-detail-house-table-wrap">
-              <table class="table table-hover nr-detail-house-table">
-                <thead>
-                  <tr>
-                    <th>아파트명</th>
-                    <th>법정동</th>
-                    <th class="text-end">건축년도</th>
-                    <th class="text-end">거래수</th>
-                    <th class="text-end"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="house in houseList" :key="house.aptSeq">
-                    <td>
-                      <RouterLink :to="`/houses/${house.aptSeq}`" class="fw-bold article-link">
-                        {{ house.aptNm }}
-                      </RouterLink>
-                      <div class="small text-muted">{{ house.sidoName }} {{ house.gugunName }}</div>
-                    </td>
-                    <td class="small">{{ house.umdNm }}</td>
-                    <td class="text-end mono">{{ house.buildYear ?? '-' }}</td>
-                    <td class="text-end">
-                      <span class="mono fw-semibold">{{ number(house.dealCount) }}</span>
-                      <span class="small text-muted"> 건</span>
-                    </td>
-                    <td class="text-end">
-                      <RouterLink :to="`/houses/${house.aptSeq}`" class="btn btn-outline-primary btn-sm">
-                        상세
-                      </RouterLink>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- 매물 목록 -->
+            <div class="nr-detail-house-card">
+              <h3 class="nr-detail-section-title">
+                이 동네 매물
+                <span class="nr-detail-house-count">{{ houseList.length }}건</span>
+              </h3>
+
+              <div v-if="houseLoading" class="nr-detail-loading">매물 불러오는 중...</div>
+
+              <div v-else-if="houseList.length === 0" class="nr-detail-empty">
+                등록된 매물이 없습니다.
+              </div>
+
+              <div v-else class="nr-detail-house-table-wrap">
+                <table class="table table-hover nr-detail-house-table">
+                  <thead>
+                    <tr>
+                      <th>아파트명</th>
+                      <th>법정동</th>
+                      <th class="text-end">건축년도</th>
+                      <th class="text-end">거래수</th>
+                      <th class="text-end"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="house in houseList"
+                      :key="house.aptSeq"
+                      :class="{ 'nr-detail-row--active': highlightedAptSeq === house.aptSeq }"
+                      @mouseenter="highlightedAptSeq = house.aptSeq"
+                      @mouseleave="highlightedAptSeq = null"
+                    >
+                      <td>
+                        <RouterLink :to="`/houses/${house.aptSeq}`" class="fw-bold article-link">
+                          {{ house.aptNm }}
+                        </RouterLink>
+                        <div class="small text-muted">{{ house.sidoName }} {{ house.gugunName }}</div>
+                      </td>
+                      <td class="small">{{ house.umdNm }}</td>
+                      <td class="text-end mono">{{ house.buildYear ?? '-' }}</td>
+                      <td class="text-end">
+                        <span class="mono fw-semibold">{{ number(house.dealCount) }}</span>
+                        <span class="small text-muted"> 건</span>
+                      </td>
+                      <td class="text-end">
+                        <RouterLink :to="`/houses/${house.aptSeq}`" class="btn btn-outline-primary btn-sm">
+                          상세
+                        </RouterLink>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         </div>

@@ -7,7 +7,7 @@ const props = defineProps({
   neighborhoods: { type: Array, default: () => [] }, // [{ rank, sidoName, sigunguName, dongName }]
 })
 
-const RANK_COLORS = ['#4F6AF5', '#22C55E', '#F97316']
+const RANK_COLORS = ['#079455', '#22C55E', '#F97316']
 
 const mapEl = ref(null)
 const errorMessage = ref('')
