@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.neighborhood.SchoolMapper">
+
+    <!-- 법정동코드별 학교 수 조회 -->
+    <select id="countByDongCode" parameterType="String" resultType="int">
+        SELECT COUNT(*)
+        FROM schools s
+        INNER JOIN dongcodes d ON d.dong_code = s.dong_code
+        WHERE d.dong_code = #{dongCode}
+          AND s.operation_status = '운영'
+    </select>
+
+    <select id="countByDongCodes"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodSchoolCount">
+        SELECT
+            d.dong_code AS dongCode,
+            d.sido_name AS sidoName,
+            d.gugun_name AS gugunName,
+            d.dong_name AS dongName,
+            COUNT(s.school_id) AS schoolCount
+        FROM dongcodes d
+        LEFT JOIN schools s
+            ON s.dong_code = d.dong_code
+           AND s.operation_status = '운영'
+        WHERE d.dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+        GROUP BY d.dong_code, d.sido_name, d.gugun_name, d.dong_name
+        ORDER BY d.dong_code
+    </select>
+
+    <!-- 시군구별 학교 수 조회 (첫 5자리 기준) -->
+    <select id="countBySimgungu" parameterType="String" resultType="int">
+        SELECT COUNT(*)
+        FROM schools s
+        INNER JOIN dongcodes d ON d.dong_code = s.dong_code
+        WHERE LEFT(d.dong_code, 5) = #{sigunguCode}
+          AND s.operation_status = '운영'
+    </select>
+
+    <!-- 전체 학교 수 -->
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*)
+        FROM schools
+        WHERE operation_status = '운영'
+    </select>
+
+</mapper>
