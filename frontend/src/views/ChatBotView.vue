@@ -45,6 +45,19 @@ async function scrollToBottom() {
     listRef.value.scrollTop = listRef.value.scrollHeight
   }
 }
+
+function renderMessage(content) {
+  const escaped = String(content ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+  return escaped
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>')
+}
 </script>
 
 <template>
@@ -66,9 +79,7 @@ async function scrollToBottom() {
           <div class="chatbot-avatar" aria-hidden="true">
             {{ message.role === 'user' ? '나' : '🏡' }}
           </div>
-          <div class="chatbot-bubble">
-            {{ message.content }}
-          </div>
+          <div class="chatbot-bubble" v-html="renderMessage(message.content)"></div>
         </div>
         <div v-if="loading" class="chatbot-row is-bot">
           <div class="chatbot-avatar" aria-hidden="true">🏡</div>
@@ -185,11 +196,19 @@ async function scrollToBottom() {
   max-width: min(72%, 620px);
   padding: 13px 15px;
   border-radius: 8px;
-  white-space: pre-wrap;
   line-height: 1.68;
   font-size: 15px;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+
+.chatbot-bubble :deep(strong) {
+  color: #111827;
+  font-weight: 800;
+}
+
+.is-user .chatbot-bubble :deep(strong) {
+  color: #ffffff;
 }
 
 .is-user .chatbot-bubble {

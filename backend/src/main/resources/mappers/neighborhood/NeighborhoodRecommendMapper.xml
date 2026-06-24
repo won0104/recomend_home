@@ -78,7 +78,7 @@
                 COS(RADIANS(#{originLat})) * COS(RADIANS(sido.slat)) *
                 COS(RADIANS(sido.slng) - RADIANS(#{originLng})) +
                 SIN(RADIANS(#{originLat})) * SIN(RADIANS(sido.slat))
-            )))) &lt;= #{radiusKm} + 150
+            )))) &lt;= #{radiusKm} + 50
             /* 2단계: 동 평균 좌표 정밀 필터 */
             AND (6371 * ACOS(LEAST(1, GREATEST(-1,
                 COS(RADIANS(#{originLat})) * COS(RADIANS(dg.dong_lat)) *

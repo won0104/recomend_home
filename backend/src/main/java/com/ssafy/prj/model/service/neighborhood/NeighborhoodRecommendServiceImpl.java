@@ -23,6 +23,7 @@ import com.ssafy.prj.model.mapper.neighborhood.ParkMapper;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 프론트엔드의 동네 추천 요청을 실제 점수 계산까지 연결하는 서비스다.
@@ -40,6 +41,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendService {
 
     private final NeighborhoodRecommendMapper neighborhoodRecommendMapper;
@@ -52,6 +54,13 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
     @Transactional(readOnly = true)
     public NeighborhoodRecommendResponse recommend(NeighborhoodRecommendRequest request) {
         validate(request);
+        // 후보 법정동 조회에 들어가는 핵심 조건을 남겨, 챗봇 DTO 변환 결과와 추천 서비스 입력값을 비교할 수 있게 한다.
+        log.info("[NeighborhoodRecommendation] candidate search started. originLat={}, originLng={}, radiusKm={}, maxPrice={}, priorities={}",
+            request.getLatitude(),
+            request.getLongitude(),
+            request.getRadiusKm(),
+            request.getMaxPrice(),
+            request.getPriorities());
 
         // 1. 주거 조건으로 먼저 후보 법정동 목록을 좁힌다.
         List<String> legalDongCodes = neighborhoodRecommendMapper.findLegalDongCodes(
@@ -60,6 +69,7 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             request.getRadiusKm(),
             request.getMaxPrice()
         );
+        logCandidateNeighborhoods(legalDongCodes);
 
         // 2. "CAFE", "PARK" 같은 HTTP 문자열을 점수 계산기가 이해하는 enum으로 변환한다.
         List<SurveyCategory> priorities = toSurveyCategories(request.getPriorities());
@@ -167,6 +177,35 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             recommendation.setSidoName(nameSource.getSidoName());
             recommendation.setSigunguName(nameSource.getSigunguName());
             recommendation.setDongName(nameSource.getDongName());
+        }
+    }
+
+    /** 점수 계산 전에 후보 법정동을 먼저 남겨, 거리 필터나 좌표 데이터 이상 여부를 확인할 수 있게 한다. */
+    private void logCandidateNeighborhoods(List<String> legalDongCodes) {
+        log.info("[NeighborhoodRecommendation] candidate search completed. candidateCount={}, candidateCodes={}",
+            legalDongCodes.size(),
+            legalDongCodes);
+        if (legalDongCodes.isEmpty()) {
+            return;
+        }
+
+        List<String> logTargetCodes = legalDongCodes.stream()
+            .limit(20)
+            .toList();
+        List<RecommendedNeighborhood> candidates = neighborhoodRecommendMapper.findNeighborhoodsByDongCodes(logTargetCodes);
+        for (RecommendedNeighborhood candidate : candidates) {
+            log.info("[NeighborhoodRecommendation] candidate dong. dongCode={}, name={}",
+                candidate.getLawdCd(),
+                String.join(" ", List.of(
+                    nullToEmpty(candidate.getSidoName()),
+                    nullToEmpty(candidate.getSigunguName()),
+                    nullToEmpty(candidate.getDongName())
+                )).trim().replaceAll(" +", " "));
+        }
+        if (legalDongCodes.size() > logTargetCodes.size()) {
+            log.info("[NeighborhoodRecommendation] candidate dong log truncated. logged={}, total={}",
+                logTargetCodes.size(),
+                legalDongCodes.size());
         }
     }
 

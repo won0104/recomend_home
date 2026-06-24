@@ -14,8 +14,8 @@ public record ChatBotSlotDTO(
     @JsonPropertyDescription("기준 위치에서 추천 후보를 찾을 반경입니다. 단위는 km입니다.")
     Double radiusKm,
 
-    @Description("최대 예산입니다. 단위는 만원입니다. 예: 3억원은 30000, 8천만원은 8000")
-    @JsonPropertyDescription("최대 예산입니다. 단위는 만원입니다. 예: 3억원은 30000, 8천만원은 8000")
+    @Description("최대 예산입니다. 단위는 만원입니다. 예: 3억원은 30000, 10억원은 100000, 8천만원은 8000")
+    @JsonPropertyDescription("최대 예산입니다. 단위는 만원입니다. 예: 3억원은 30000, 10억원은 100000, 8천만원은 8000")
     Long maxPrice,
 
     @Description("거래 유형입니다. 매매, 전세, 월세 중 사용자가 말한 값을 넣습니다.")

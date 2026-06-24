@@ -55,9 +55,11 @@ public class ChatBotService {
         [추천 결과 작성 방식]
         조건이 모두 모이면 recommendNeighborhood 함수를 즉시 실행해.
         함수 결과를 받은 뒤에는 아래 형식처럼 보기 좋게 한국어로 정리해.
+        동네명은 반드시 recommendation 안의 sidoName, sigunguName, dongName을 모두 붙인 전체 이름으로 써.
+        예: "청담동" 또는 "강남구 청담동"이 아니라 "서울특별시 강남구 청담동"처럼 써.
 
         🏡 추천 동네 Top 3
-        1. 동네명 - 점수
+        1. 서울특별시 ○○구 ○○동 - 점수
            ✅ 좋은 점: 핵심 강점 1~2개
            💡 이런 분께 좋아요: 사용자 조건과 연결한 짧은 설명
 
@@ -90,12 +92,12 @@ public class ChatBotService {
             snapshot.priorities(),
             snapshot.missingFields());
 
-        String answer = callChatClient(buildUserPrompt(request));
+        String answer = callChatClient(buildUserPrompt(request, snapshot));
         log.info("[ChatBot] first answer received. waitingOnly={}, answerLength={}",
             isWaitingOnlyAnswer(answer),
             answer == null ? 0 : answer.length());
         if (isWaitingOnlyAnswer(answer)) {
-            answer = callChatClient(buildRetryPrompt(request, answer));
+            answer = callChatClient(buildRetryPrompt(request, snapshot, answer));
             log.info("[ChatBot] retry answer received. answerLength={}", answer == null ? 0 : answer.length());
         }
         return answer;
@@ -109,8 +111,8 @@ public class ChatBotService {
             .content();
     }
 
-    private String buildRetryPrompt(ChatBotRequest request, String previousAnswer) {
-        return buildUserPrompt(request) + """
+    private String buildRetryPrompt(ChatBotRequest request, ChatConditionSnapshot snapshot, String previousAnswer) {
+        return buildUserPrompt(request, snapshot) + """
 
             [중요]
             직전 답변은 아래처럼 대기 안내만 하고 끝났어.
@@ -134,7 +136,7 @@ public class ChatBotService {
             || normalized.contains("추천결과를찾");
     }
 
-    private String buildUserPrompt(ChatBotRequest request) {
+    private String buildUserPrompt(ChatBotRequest request, ChatConditionSnapshot snapshot) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("""
             아래는 지금까지의 대화야. 이 내용을 근거로 다음 행동을 결정해.
@@ -145,6 +147,8 @@ public class ChatBotService {
             - 긴 문단 하나로 쓰지 말고, 이모지와 줄바꿈을 넣어 읽기 쉽게 정리해.
 
             """);
+
+        appendSnapshotPrompt(prompt, snapshot);
 
         List<ChatMessageDTO> history = request.history();
         if (history != null) {
@@ -160,9 +164,29 @@ public class ChatBotService {
         return prompt.toString();
     }
 
+    private void appendSnapshotPrompt(StringBuilder prompt, ChatConditionSnapshot snapshot) {
+        prompt.append("[서버가 사용자 발화만 보고 추출한 조건]\n");
+        prompt.append("- locationKeyword: ").append(snapshot.locationKeyword()).append('\n');
+        prompt.append("- radiusKm: ").append(snapshot.radiusKm()).append('\n');
+        prompt.append("- maxPrice: ").append(snapshot.maxPrice()).append(" (만원 단위)\n");
+        prompt.append("- dealType: ").append(snapshot.dealType()).append('\n');
+        prompt.append("- housingType: ").append(snapshot.housingType()).append('\n');
+        prompt.append("- priorities: ").append(snapshot.priorities()).append('\n');
+        prompt.append("- missing: ").append(snapshot.missingFields()).append("\n\n");
+        if (snapshot.missingFields().isEmpty()) {
+            prompt.append("""
+                위 조건은 서버가 검산한 값이야.
+                recommendNeighborhood 함수를 호출할 때 위 값을 그대로 사용해.
+                특히 maxPrice는 이미 만원 단위로 변환된 값이므로 다시 계산하지 마.
+
+                """);
+        }
+    }
+
     private ChatConditionSnapshot extractConditionSnapshot(ChatBotRequest request) {
-        String conversation = conversationText(request);
-        String locationKeyword = extractLocationKeyword(conversation);
+        List<String> userMessages = userMessages(request);
+        String conversation = String.join("\n", userMessages);
+        String locationKeyword = extractLocationKeyword(userMessages);
         Double radiusKm = extractRadiusKm(conversation);
         Long maxPrice = extractMaxPrice(conversation);
         String dealType = extractFirstMention(conversation, List.of("매매", "전세", "월세"));
@@ -200,29 +224,60 @@ public class ChatBotService {
         );
     }
 
-    private String conversationText(ChatBotRequest request) {
-        StringBuilder text = new StringBuilder();
+    private List<String> userMessages(ChatBotRequest request) {
+        List<String> messages = new ArrayList<>();
         List<ChatMessageDTO> history = request.history();
         if (history != null) {
             for (ChatMessageDTO message : history) {
-                if (message != null && !isBlank(message.content())) {
-                    text.append(message.content()).append('\n');
+                if (message != null && isUserRole(message.role()) && !isBlank(message.content())) {
+                    messages.add(message.content().trim());
                 }
             }
         }
         if (!isBlank(request.message())) {
-            text.append(request.message());
+            messages.add(request.message().trim());
         }
-        return text.toString();
+        return messages;
     }
 
-    private String extractLocationKeyword(String text) {
-        Matcher matcher = LOCATION_PATTERN.matcher(text);
+    private boolean isUserRole(String role) {
+        return role == null
+            || "user".equalsIgnoreCase(role)
+            || "나".equals(role)
+            || "사용자".equals(role);
+    }
+
+    private String extractLocationKeyword(List<String> userMessages) {
+        String joinedText = String.join("\n", userMessages);
+        Matcher matcher = LOCATION_PATTERN.matcher(joinedText);
         String lastMatch = null;
         while (matcher.find()) {
             lastMatch = matcher.group(1);
         }
+        if (!isBlank(lastMatch)) {
+            return lastMatch;
+        }
+
+        for (String message : userMessages) {
+            if (isLikelyLocationMessage(message)) {
+                lastMatch = message;
+            }
+        }
         return lastMatch;
+    }
+
+    private boolean isLikelyLocationMessage(String message) {
+        if (isBlank(message) || message.length() > 30) {
+            return false;
+        }
+        if (!Pattern.compile("[가-힣A-Za-z]").matcher(message).find()) {
+            return false;
+        }
+        return extractRadiusKm(message) == null
+            && extractMaxPrice(message) == null
+            && extractFirstMention(message, List.of("매매", "전세", "월세")) == null
+            && extractFirstMention(message, List.of("아파트", "오피스텔", "원룸", "빌라", "주택")) == null
+            && extractPriorities(message).isEmpty();
     }
 
     private Double extractRadiusKm(String text) {
