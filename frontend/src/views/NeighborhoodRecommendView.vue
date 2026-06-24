@@ -1,6 +1,6 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import BudgetStep from '../components/neighborhood/BudgetStep.vue'
 import LifestyleStep from '../components/neighborhood/LifestyleStep.vue'
 import NeighborhoodDetailMap from '../components/neighborhood/NeighborhoodDetailMap.vue'
@@ -12,6 +12,13 @@ import TransactionHousingStep from '../components/neighborhood/TransactionHousin
 import { fetchHouses } from '../api/houses'
 import { recommendNeighborhood } from '../api/neighborhoods'
 import { number } from '../utils/format'
+
+const route = useRoute()
+const router = useRouter()
+
+// 이 탭에서만 마지막 추천을 복원한다. 탭을 닫으면 자동으로 사라져 오래된 추천이 남지 않는다.
+const RECOMMENDATION_SESSION_KEY = 'neighborhood-recommendation-state-v1'
+const RESTORABLE_SCREENS = new Set(['search', 'radius', 'transaction', 'budget', 'lifestyle', 'result', 'detail'])
 
 const selectedPlace = ref(null)
 const screen = ref('search')
@@ -44,6 +51,69 @@ const houseList = ref([])
 const houseLoading = ref(false)
 const highlightedAptSeq = ref(null) // 행 hover
 const pinnedAptSeq = ref(null)      // 지도 핀 클릭으로 고정된 행
+
+/** URL의 step은 브라우저 뒤로가기용, sessionStorage는 새로고침 복원용으로 역할을 나눈다. */
+function moveToScreen(nextScreen, replaceHistory = false) {
+  if (!RESTORABLE_SCREENS.has(nextScreen)) return
+  screen.value = nextScreen
+
+  const query = { ...route.query }
+  if (nextScreen === 'search') delete query.step
+  else query.step = nextScreen
+  const navigate = replaceHistory ? router.replace : router.push
+  navigate({ query })
+}
+
+/** API 응답을 다시 요청하지 않고 결과 화면을 복원할 수 있도록 필요한 화면 상태만 저장한다. */
+function saveRecommendationState() {
+  const state = {
+    screen: screen.value,
+    selectedPlace: selectedPlace.value,
+    commuteRadius: commuteRadius.value,
+    budgetAmount: budgetAmount.value,
+    dealType: dealType.value,
+    housingType: housingType.value,
+    monthlyRentMax: monthlyRentMax.value,
+    selectedLifestyleIds: selectedLifestyleIds.value,
+    lifestyleMood: lifestyleMood.value,
+    recommendations: recommendations.value,
+    totalCandidateCount: totalCandidateCount.value,
+    savedDealType: savedDealType.value,
+    selectedNeighborhood: selectedNeighborhood.value,
+    houseList: houseList.value,
+  }
+  sessionStorage.setItem(RECOMMENDATION_SESSION_KEY, JSON.stringify(state))
+}
+
+function clearRecommendationState() {
+  sessionStorage.removeItem(RECOMMENDATION_SESSION_KEY)
+}
+
+/** sessionStorage의 값은 사용자가 수정할 수도 있으므로 읽기 실패 시 안전하게 처음 화면으로 돌아간다. */
+function restoreRecommendationState() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(RECOMMENDATION_SESSION_KEY) || 'null')
+    if (!saved || !RESTORABLE_SCREENS.has(saved.screen)) return false
+    selectedPlace.value = saved.selectedPlace ?? null
+    commuteRadius.value = saved.commuteRadius ?? 15
+    budgetAmount.value = saved.budgetAmount ?? 3
+    dealType.value = saved.dealType ?? '매매'
+    housingType.value = saved.housingType ?? '아파트'
+    monthlyRentMax.value = saved.monthlyRentMax ?? 200
+    selectedLifestyleIds.value = saved.selectedLifestyleIds ?? []
+    lifestyleMood.value = saved.lifestyleMood ?? 'green'
+    recommendations.value = saved.recommendations ?? []
+    totalCandidateCount.value = saved.totalCandidateCount ?? 0
+    savedDealType.value = saved.savedDealType ?? dealType.value
+    selectedNeighborhood.value = saved.selectedNeighborhood ?? null
+    houseList.value = saved.houseList ?? []
+    screen.value = saved.screen
+    return true
+  } catch {
+    clearRecommendationState()
+    return false
+  }
+}
 
 // 지도에 전달할 하이라이트: 핀 고정이 있으면 핀 우선, 없으면 hover
 const mapHighlight = computed(() => pinnedAptSeq.value || highlightedAptSeq.value)
@@ -167,27 +237,27 @@ const recommendationCondition = computed(() => ({
 }))
 
 function handlePlaceSelect(place) { selectedPlace.value = place }
-function openRadiusStep(place) { selectedPlace.value = place; screen.value = 'radius' }
-function openTransactionStep() { screen.value = 'transaction' }
+function openRadiusStep(place) { selectedPlace.value = place; moveToScreen('radius') }
+function openTransactionStep() { moveToScreen('transaction') }
 function openBudgetStep() {
   // 매매/전세에서 큰 예산을 골랐다가 월세로 바꿔도, 월세 전용 상한을 넘는 값이 남지 않게 보정한다.
   if (dealType.value === '월세') {
     budgetAmount.value = Math.min(Number(budgetAmount.value), 5)
     monthlyRentMax.value = Math.min(Number(monthlyRentMax.value ?? 200), 200)
   }
-  screen.value = 'budget'
+  moveToScreen('budget')
 }
-function openLifestyleStep() { screen.value = 'lifestyle' }
-function backToSearch() { screen.value = 'search' }
-function backToRadiusStep() { screen.value = 'radius' }
-function backToTransactionStep() { screen.value = 'transaction' }
-function backToBudgetStep() { screen.value = 'budget' }
-function backToLifestyleStep() { screen.value = 'lifestyle' }
-function backToResult() { screen.value = 'result' }
+function openLifestyleStep() { moveToScreen('lifestyle') }
+function backToSearch() { clearRecommendationState(); moveToScreen('search') }
+function backToRadiusStep() { moveToScreen('radius') }
+function backToTransactionStep() { moveToScreen('transaction') }
+function backToBudgetStep() { moveToScreen('budget') }
+function backToLifestyleStep() { moveToScreen('lifestyle') }
+function backToResult() { moveToScreen('result') }
 
 async function openDetail(rec) {
   selectedNeighborhood.value = rec
-  screen.value = 'detail'
+  moveToScreen('detail')
   houseLoading.value = true
   houseList.value = []
   pinnedAptSeq.value = null
@@ -225,7 +295,7 @@ async function submitRecommendation() {
     const response = await recommendNeighborhood(recommendationCondition.value)
     recommendations.value = response?.data?.recommendations ?? []
     totalCandidateCount.value = response?.data?.totalCount ?? 0
-    screen.value = 'result'
+    moveToScreen('result')
   } catch (error) {
     console.error(error?.response?.data?.message || '동네 추천 후보를 불러오지 못했습니다.')
   } finally {
@@ -233,6 +303,56 @@ async function submitRecommendation() {
     recommendLoading.value = false
   }
 }
+
+// 조건·결과가 바뀔 때마다 같은 탭의 sessionStorage에 저장한다. API 호출이나 DB 저장은 하지 않는다.
+watch([
+  screen, selectedPlace, commuteRadius, budgetAmount, dealType, housingType, monthlyRentMax,
+  selectedLifestyleIds, lifestyleMood, recommendations, totalCandidateCount, savedDealType,
+  selectedNeighborhood, houseList,
+], saveRecommendationState, { deep: true })
+
+// 브라우저 뒤로가기/앞으로가기는 URL query의 step만 바꾼다. 그 변경을 화면 단계에 반영한다.
+watch(() => route.query.step, (step) => {
+  if (!step) {
+    screen.value = 'search'
+    return
+  }
+  if (!RESTORABLE_SCREENS.has(step)) {
+    moveToScreen('search', true)
+    return
+  }
+  // 결과·상세는 저장된 추천 데이터가 있어야만 표시할 수 있다.
+  if ((step === 'result' || step === 'detail') && recommendations.value.length === 0) {
+    moveToScreen('search', true)
+    return
+  }
+  if (step === 'detail' && !selectedNeighborhood.value) {
+    moveToScreen('result', true)
+    return
+  }
+  screen.value = step
+})
+
+onMounted(() => {
+  const restored = restoreRecommendationState()
+  const requestedStep = route.query.step
+
+  // 새로고침은 URL의 단계와 sessionStorage의 결과를 조합해 즉시 복원한다.
+  if (requestedStep && RESTORABLE_SCREENS.has(requestedStep)) {
+    if ((requestedStep === 'result' || requestedStep === 'detail') && !restored) {
+      moveToScreen('search', true)
+      return
+    }
+    if (requestedStep === 'detail' && !selectedNeighborhood.value) {
+      moveToScreen('result', true)
+      return
+    }
+    screen.value = requestedStep
+  } else if (restored && screen.value !== 'search') {
+    // 주소에 step이 없더라도 같은 탭의 마지막 단계가 있다면 URL도 복원 상태와 일치시킨다.
+    moveToScreen(screen.value, true)
+  }
+})
 </script>
 
 <template>
