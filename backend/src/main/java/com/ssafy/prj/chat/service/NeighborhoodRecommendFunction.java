@@ -30,9 +30,23 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
 
     @Override
     public ChatBotRecommendResult apply(ChatBotSlotDTO slot) {
+        log.info("[ChatBot-Recommend] tool called. slot={}", slot);
         validate(slot);
+        log.info("[ChatBot-Recommend] slot validated. locationKeyword={}, radiusKm={}, maxPrice={}, dealType={}, housingType={}, priorities={}",
+            slot.locationKeyword(),
+            slot.radiusKm(),
+            slot.maxPrice(),
+            slot.dealType(),
+            slot.housingType(),
+            slot.priorities());
 
         KakaoPlace place = kakaoApiService.searchFirstPlace(slot.locationKeyword());
+        log.info("[ChatBot-Recommend] kakao place resolved. keyword={}, placeName={}, latitude={}, longitude={}",
+            slot.locationKeyword(),
+            place.name(),
+            place.latitude(),
+            place.longitude());
+
         NeighborhoodRecommendRequest request = new NeighborhoodRecommendRequest();
         request.setLatitude(place.latitude());
         request.setLongitude(place.longitude());
@@ -41,9 +55,21 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
         request.setDealType(slot.dealType());
         request.setHousingType(slot.housingType());
         request.setPriorities(slot.priorities().stream().map(SurveyCategory::name).toList());
+        log.info("[ChatBot-Recommend] converted request. latitude={}, longitude={}, radiusKm={}, maxPrice={}, dealType={}, housingType={}, priorities={}",
+            request.getLatitude(),
+            request.getLongitude(),
+            request.getRadiusKm(),
+            request.getMaxPrice(),
+            request.getDealType(),
+            request.getHousingType(),
+            request.getPriorities());
 
         try {
             NeighborhoodRecommendResponse response = neighborhoodRecommendService.recommend(request);
+            log.info("[ChatBot-Recommend] recommendation completed. totalCount={}, recommendationCount={}, priorities={}",
+                response.getTotalCount(),
+                response.getRecommendations() == null ? 0 : response.getRecommendations().size(),
+                response.getPriorities());
             return new ChatBotRecommendResult(
                 slot.locationKeyword(),
                 place.latitude(),
