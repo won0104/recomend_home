@@ -13,6 +13,8 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -21,6 +23,7 @@ import java.util.List;
 
 import com.ssafy.prj.security.password.Sha256PasswordEncoder;
 import com.ssafy.prj.security.web.SecurityResponseHelper;
+import com.ssafy.prj.security.jwt.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -45,7 +48,8 @@ public class CustomSecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, UserDetailsService userDetailsService) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, UserDetailsService userDetailsService,
+            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         http.authorizeHttpRequests(auth -> auth
@@ -75,10 +79,9 @@ public class CustomSecurityConfig {
                         SecurityResponseHelper.writeJson(response, HttpServletResponseStatus.FORBIDDEN,
                                 java.util.Map.of("success", false, "message", "권한이 없습니다.", "data", null))));
 
-        http.rememberMe(remember -> remember
-                .userDetailsService(userDetailsService)
-                .tokenValiditySeconds(60 * 60 * 24 * 7));
-
+        // JWT는 요청마다 토큰으로 인증하므로 서버 HTTP 세션과 Remember-me 쿠키를 만들지 않는다.
+        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         http.csrf(csrf -> csrf.disable());
 
         return http.build();

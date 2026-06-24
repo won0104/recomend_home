@@ -9,9 +9,15 @@ import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
 import TransactionHousingStep from '../components/neighborhood/TransactionHousingStep.vue'
+import { addFavorite, deleteFavorite, fetchFavorites } from '../api/favorites'
 import { fetchHouses } from '../api/houses'
 import { recommendNeighborhood } from '../api/neighborhoods'
 import { number } from '../utils/format'
+
+// App.vue가 전달하는 로그인 정보를 이용한다. 비회원은 즐겨찾기 버튼을 보지 않는다.
+const props = defineProps({
+  user: { type: Object, default: null },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +40,10 @@ const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
 const recommendations = ref([])
 const totalCandidateCount = ref(0)
+// 추천 결과와 별개로, 로그인 사용자가 이미 저장한 법정동 코드를 관리한다.
+const favoriteKeys = ref([])
+// 같은 동을 연속으로 등록/삭제하지 않도록 요청 중인 카드만 잠시 비활성화한다.
+const favoriteBusyKeys = ref([])
 const savedDealType = ref('매매') // 추천 요청 시점의 거래 유형 스냅샷
 
 // 로딩 단계 애니메이션
@@ -255,6 +265,72 @@ function backToBudgetStep() { moveToScreen('budget') }
 function backToLifestyleStep() { moveToScreen('lifestyle') }
 function backToResult() { moveToScreen('result') }
 
+/**
+ * 관심지역 테이블은 lawd_cd를 고유 식별자로 사용한다.
+ * 추천 응답의 lawdCd도 같은 법정동 코드이므로 별도의 임의 key를 만들지 않는다.
+ */
+function favoriteKey(rec) {
+  return String(rec.lawdCd)
+}
+
+function isFavorite(rec) {
+  return favoriteKeys.value.includes(favoriteKey(rec))
+}
+
+function isFavoriteBusy(rec) {
+  return favoriteBusyKeys.value.includes(favoriteKey(rec))
+}
+
+/** 로그인한 사용자의 기존 관심지역을 읽어 카드의 별표 상태를 맞춘다. */
+async function loadFavorites() {
+  if (!props.user) {
+    favoriteKeys.value = []
+    return
+  }
+
+  try {
+    const response = await fetchFavorites()
+    const favorites = Array.isArray(response.data) ? response.data : []
+    favoriteKeys.value = favorites.map((favorite) => String(favorite.key))
+  } catch {
+    // 목록 로딩 실패가 추천 결과 화면 전체를 막지는 않도록 빈 목록으로 처리한다.
+    favoriteKeys.value = []
+  }
+}
+
+/**
+ * 카드의 별표 버튼으로 관심지역을 등록하거나 해제한다.
+ * 템플릿의 click.stop 덕분에 별표를 눌러도 카드 상세 화면으로 이동하지 않는다.
+ */
+async function toggleFavorite(rec) {
+  if (!props.user || isFavoriteBusy(rec)) return
+
+  const key = favoriteKey(rec)
+  favoriteBusyKeys.value = [...favoriteBusyKeys.value, key]
+  try {
+    if (isFavorite(rec)) {
+      await deleteFavorite(key)
+      favoriteKeys.value = favoriteKeys.value.filter((favorite) => favorite !== key)
+      return
+    }
+
+    await addFavorite({
+      key,
+      sido: rec.sidoName ?? '',
+      sigungu: rec.sigunguName ?? '',
+      emd: rec.dongName ?? '',
+      lawdCd: key,
+    })
+    favoriteKeys.value = [...favoriteKeys.value, key]
+  } catch (error) {
+    // 다른 화면에서 이미 변경한 경우까지 반영하도록, 실패 후 서버의 실제 목록을 다시 읽는다.
+    await loadFavorites()
+    console.error(error?.response?.data?.message || '즐겨찾기를 변경하지 못했습니다.')
+  } finally {
+    favoriteBusyKeys.value = favoriteBusyKeys.value.filter((favorite) => favorite !== key)
+  }
+}
+
 async function openDetail(rec) {
   selectedNeighborhood.value = rec
   moveToScreen('detail')
@@ -332,6 +408,9 @@ watch(() => route.query.step, (step) => {
   }
   screen.value = step
 })
+
+// 로그인/로그아웃 직후에도 새로고침 없이 즐겨찾기 버튼 상태를 맞춘다.
+watch(() => props.user, loadFavorites, { immediate: true })
 
 onMounted(() => {
   const restored = restoreRecommendationState()
@@ -411,6 +490,18 @@ onMounted(() => {
                 <div class="nr-card__name-row">
                   <span class="nr-card__dong">{{ rec.dongName }}</span>
                   <span class="nr-card__district">{{ [rec.sidoName, rec.sigunguName].filter(Boolean).join(' ') }}</span>
+                  <!-- 카드 전체의 상세 이동과 분리하기 위해 click.stop을 사용한다. -->
+                  <button
+                    v-if="user"
+                    type="button"
+                    class="nr-card__favorite"
+                    :class="{ 'nr-card__favorite--active': isFavorite(rec) }"
+                    :disabled="isFavoriteBusy(rec)"
+                    :aria-label="isFavorite(rec) ? '즐겨찾기 삭제' : '즐겨찾기 추가'"
+                    @click.stop="toggleFavorite(rec)"
+                  >
+                    {{ isFavorite(rec) ? '★' : '☆' }}
+                  </button>
                 </div>
                 <div class="nr-card__meta">
                   <span>생활 성향 적합도 <strong>{{ rec.score.toFixed(0) }}%</strong></span>

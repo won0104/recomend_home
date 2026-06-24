@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
-import { fetchMe, logout } from './api/auth'
+import { fetchMe, logout, refresh } from './api/auth'
 import SiteHeader from './components/SiteHeader.vue'
 import SiteFooter from './components/SiteFooter.vue'
 
@@ -11,6 +11,7 @@ const loading = ref(true)
 
 async function loadMe() {
   try {
+    await refresh()
     const response = await fetchMe()
     user.value = response.data
   } catch {

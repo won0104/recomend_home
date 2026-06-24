@@ -2172,6 +2172,28 @@ dl.row dd {
   font-size: 13px;
   color: var(--text-secondary, #777);
 }
+.nr-card__favorite {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.nr-card__favorite:hover:not(:disabled) {
+  color: #079455;
+}
+.nr-card__favorite--active {
+  color: #079455;
+}
+.nr-card__favorite:disabled {
+  cursor: wait;
+  opacity: .6;
+}
 
 .nr-card__meta {
   font-size: 13px;

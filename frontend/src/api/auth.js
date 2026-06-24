@@ -1,12 +1,21 @@
 import api from './client'
+import { clearAccessToken, setAccessToken } from './token'
 
 export async function login(payload) {
   const { data } = await api.post('/auth/login', payload)
+  setAccessToken(data.data.accessToken)
   return data
 }
 
 export async function logout() {
   const { data } = await api.post('/auth/logout')
+  clearAccessToken()
+  return data
+}
+
+export async function refresh() {
+  const { data } = await api.post('/auth/refresh')
+  setAccessToken(data.data.accessToken)
   return data
 }
 
