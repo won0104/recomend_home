@@ -32,11 +32,13 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
     public ChatBotRecommendResult apply(ChatBotSlotDTO slot) {
         log.info("[ChatBot-Recommend] tool called. slot={}", slot);
         validate(slot);
-        log.info("[ChatBot-Recommend] slot validated. locationKeyword={}, radiusKm={}, maxPrice={}, dealType={}, housingType={}, priorities={}",
+        log.info("[ChatBot-Recommend] slot validated. locationKeyword={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}",
             slot.locationKeyword(),
             slot.radiusKm(),
-            slot.maxPrice(),
             slot.dealType(),
+            slot.dealAmountMax(),
+            slot.depositMax(),
+            slot.monthlyRentMax(),
             slot.housingType(),
             slot.priorities());
 
@@ -77,8 +79,10 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
                 place.latitude(),
                 place.longitude(),
                 slot.radiusKm(),
-                slot.maxPrice(),
                 slot.dealType(),
+                slot.dealAmountMax(),
+                slot.depositMax(),
+                slot.monthlyRentMax(),
                 slot.housingType(),
                 response
             );
@@ -99,12 +103,10 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
         if (slot.radiusKm() == null || slot.radiusKm() <= 0) {
             throw new IllegalArgumentException("반경은 0보다 커야 합니다.");
         }
-        if (slot.maxPrice() == null || slot.maxPrice() <= 0) {
-            throw new IllegalArgumentException("예산은 0보다 커야 합니다.");
-        }
         if (isBlank(slot.dealType())) {
             throw new IllegalArgumentException("거래 유형이 필요합니다.");
         }
+        validateBudget(slot);
         if (isBlank(slot.housingType())) {
             throw new IllegalArgumentException("주거 형태가 필요합니다.");
         }
@@ -114,14 +116,44 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
         }
     }
 
-    private void applyBudget(NeighborhoodRecommendRequest request, ChatBotSlotDTO slot) {
-        int maxPrice = Math.toIntExact(slot.maxPrice());
-        String dealType = slot.dealType() == null ? "" : slot.dealType().trim();
+    private void validateBudget(ChatBotSlotDTO slot) {
+        String dealType = slot.dealType().trim();
         if ("매매".equals(dealType)) {
-            request.setDealAmountMax(maxPrice);
+            validatePositive("매매가 최대", slot.dealAmountMax());
             return;
         }
-        request.setDepositMax(maxPrice);
+        if ("전세".equals(dealType)) {
+            validatePositive("보증금 최대", slot.depositMax());
+            return;
+        }
+        if ("월세".equals(dealType)) {
+            validatePositive("보증금 최대", slot.depositMax());
+            validatePositive("월세 최대", slot.monthlyRentMax());
+            return;
+        }
+        throw new IllegalArgumentException("거래 유형은 매매, 전세, 월세 중 하나여야 합니다.");
+    }
+
+    private void validatePositive(String label, Long value) {
+        if (value == null || value <= 0) {
+            throw new IllegalArgumentException(label + "은(는) 0보다 커야 합니다.");
+        }
+    }
+
+    private void applyBudget(NeighborhoodRecommendRequest request, ChatBotSlotDTO slot) {
+        String dealType = slot.dealType() == null ? "" : slot.dealType().trim();
+        if ("매매".equals(dealType)) {
+            request.setDealAmountMax(Math.toIntExact(slot.dealAmountMax()));
+            return;
+        }
+        if ("전세".equals(dealType)) {
+            request.setDepositMax(Math.toIntExact(slot.depositMax()));
+            return;
+        }
+        if ("월세".equals(dealType)) {
+            request.setDepositMax(Math.toIntExact(slot.depositMax()));
+            request.setMonthlyRentMax(Math.toIntExact(slot.monthlyRentMax()));
+        }
     }
 
     private boolean isBlank(String value) {

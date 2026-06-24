@@ -22,6 +22,9 @@ public class ChatBotService {
     private static final Pattern RADIUS_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*km", Pattern.CASE_INSENSITIVE);
     private static final Pattern EOK_BUDGET_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*억");
     private static final Pattern MANWON_BUDGET_PATTERN = Pattern.compile("(\\d+(?:,\\d{3})*|\\d+)\\s*만");
+    private static final Pattern DEPOSIT_PATTERN = Pattern.compile("(?:보증금|보증)\\s*(\\d+(?:\\.\\d+)?)(?:\\s*(억|만원|만))?");
+    private static final Pattern MONTHLY_RENT_PATTERN = Pattern.compile("(?:월세|월)\\s*(\\d+(?:\\.\\d+)?)(?:\\s*(만원|만))?");
+    private static final Pattern SLASH_RENT_PATTERN = Pattern.compile("(\\d+(?:,\\d{3})*)\\s*/\\s*(\\d+(?:,\\d{3})*)");
     private static final Pattern LOCATION_PATTERN = Pattern.compile("([가-힣A-Za-z0-9]+(?:역|시청|구청|학교|대학교|병원|공원|터미널))");
 
     private static final String SYSTEM_PROMPT = """
@@ -40,17 +43,28 @@ public class ChatBotService {
         [필수 조건 6가지]
         1. 장소 키워드: 기준 위치 이름. 위도/경도가 아니라 서울역, 삼성역, 서울시청 같은 장소명으로 받아.
         2. 반경: km 단위 숫자.
-        3. 예산: 만원 단위 숫자. 3억원은 30000으로 해석해.
-        4. 거래유형: 매매, 전세, 월세 등.
+        3. 거래유형: 매매, 전세, 월세 중 하나.
+        4. 거래유형별 예산:
+           - 매매: dealAmountMax에 최대 매매가를 만원 단위로 넣어. 10억원은 100000.
+           - 전세: depositMax에 최대 보증금을 만원 단위로 넣어. 5억원은 50000.
+           - 월세: depositMax와 monthlyRentMax를 모두 넣어. 예: 보증금 5000만원, 월세 100만원은 depositMax=5000, monthlyRentMax=100.
         5. 주거형태: 아파트, 원룸, 오피스텔 등.
         6. 우선순위 3개: SCHOOL(학교), CAFE(카페/외식), CULTURE(운동/문화), SHOPPING(장보기/생활편의), PARK(공원/산책), MEDICAL(의료), PET(반려동물) 중 정확히 3개.
 
         [조건 질문 예시]
         - 📍 기준 위치는 어디로 볼까요? 예: 서울시청, 강남역, 삼성역
         - 🚶 어느 정도 반경까지 괜찮으세요? 예: 3km, 5km, 10km
-        - 💰 예산은 어느 정도로 볼까요? 예: 6억 내
-        - 🏠 어떤 집을 찾으세요? 예: 매매 아파트, 전세 오피스텔
+        - 🏠 거래 유형은 무엇으로 볼까요? 예: 매매, 전세, 월세
+        - 💰 매매라면 최대 매매가, 전세라면 최대 보증금, 월세라면 보증금과 월세를 물어봐.
+        - 🏡 어떤 주거 형태를 찾으세요? 예: 아파트, 원룸, 오피스텔
         - ✨ 생활에서 중요한 것 3가지를 골라주세요: 학교, 카페/외식, 문화, 장보기, 공원, 의료, 반려동물
+
+        [예산 질문 규칙]
+        - 거래유형을 모르면 예산을 먼저 묻지 말고 거래유형부터 물어봐.
+        - 매매를 선택하면 "최대 매매가는 얼마까지 괜찮으세요?"라고 물어봐.
+        - 전세를 선택하면 "전세 보증금은 최대 얼마까지 괜찮으세요?"라고 물어봐.
+        - 월세를 선택하면 "보증금과 월세는 각각 최대 얼마까지 괜찮으세요?"라고 물어봐.
+        - 월세에서 보증금이나 월세 중 하나라도 없으면 recommendNeighborhood 함수를 호출하지 마.
 
         [추천 결과 작성 방식]
         조건이 모두 모이면 recommendNeighborhood 함수를 즉시 실행해.
@@ -83,11 +97,13 @@ public class ChatBotService {
         int historyCount = request.history() == null ? 0 : request.history().size();
         log.info("[ChatBot] request received. message={}, historyCount={}", request.message(), historyCount);
         ChatConditionSnapshot snapshot = extractConditionSnapshot(request);
-        log.info("[ChatBot] condition snapshot from text. locationKeyword={}, radiusKm={}, maxPrice={}, dealType={}, housingType={}, priorities={}, missing={}",
+        log.info("[ChatBot] condition snapshot from text. locationKeyword={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}, missing={}",
             snapshot.locationKeyword(),
             snapshot.radiusKm(),
-            snapshot.maxPrice(),
             snapshot.dealType(),
+            snapshot.dealAmountMax(),
+            snapshot.depositMax(),
+            snapshot.monthlyRentMax(),
             snapshot.housingType(),
             snapshot.priorities(),
             snapshot.missingFields());
@@ -168,8 +184,10 @@ public class ChatBotService {
         prompt.append("[서버가 사용자 발화만 보고 추출한 조건]\n");
         prompt.append("- locationKeyword: ").append(snapshot.locationKeyword()).append('\n');
         prompt.append("- radiusKm: ").append(snapshot.radiusKm()).append('\n');
-        prompt.append("- maxPrice: ").append(snapshot.maxPrice()).append(" (만원 단위)\n");
         prompt.append("- dealType: ").append(snapshot.dealType()).append('\n');
+        prompt.append("- dealAmountMax: ").append(snapshot.dealAmountMax()).append(" (만원 단위)\n");
+        prompt.append("- depositMax: ").append(snapshot.depositMax()).append(" (만원 단위)\n");
+        prompt.append("- monthlyRentMax: ").append(snapshot.monthlyRentMax()).append(" (만원 단위)\n");
         prompt.append("- housingType: ").append(snapshot.housingType()).append('\n');
         prompt.append("- priorities: ").append(snapshot.priorities()).append('\n');
         prompt.append("- missing: ").append(snapshot.missingFields()).append("\n\n");
@@ -177,7 +195,8 @@ public class ChatBotService {
             prompt.append("""
                 위 조건은 서버가 검산한 값이야.
                 recommendNeighborhood 함수를 호출할 때 위 값을 그대로 사용해.
-                특히 maxPrice는 이미 만원 단위로 변환된 값이므로 다시 계산하지 마.
+                예산 필드는 이미 만원 단위로 변환된 값이므로 다시 계산하지 마.
+                매매는 dealAmountMax, 전세는 depositMax, 월세는 depositMax와 monthlyRentMax를 사용해.
 
                 """);
         }
@@ -188,8 +207,8 @@ public class ChatBotService {
         String conversation = String.join("\n", userMessages);
         String locationKeyword = extractLocationKeyword(userMessages);
         Double radiusKm = extractRadiusKm(conversation);
-        Long maxPrice = extractMaxPrice(conversation);
         String dealType = extractFirstMention(conversation, List.of("매매", "전세", "월세"));
+        BudgetSnapshot budget = extractBudgetSnapshot(conversation, dealType);
         String housingType = extractFirstMention(conversation, List.of("아파트", "오피스텔", "원룸", "빌라", "주택"));
         List<SurveyCategory> priorities = extractPriorities(conversation);
 
@@ -200,11 +219,10 @@ public class ChatBotService {
         if (radiusKm == null) {
             missingFields.add("radiusKm");
         }
-        if (maxPrice == null) {
-            missingFields.add("maxPrice");
-        }
         if (isBlank(dealType)) {
             missingFields.add("dealType");
+        } else {
+            addMissingBudgetFields(missingFields, dealType, budget);
         }
         if (isBlank(housingType)) {
             missingFields.add("housingType");
@@ -216,12 +234,100 @@ public class ChatBotService {
         return new ChatConditionSnapshot(
             locationKeyword,
             radiusKm,
-            maxPrice,
             dealType,
+            budget.dealAmountMax(),
+            budget.depositMax(),
+            budget.monthlyRentMax(),
             housingType,
             priorities,
             missingFields
         );
+    }
+
+    private void addMissingBudgetFields(List<String> missingFields, String dealType, BudgetSnapshot budget) {
+        if ("매매".equals(dealType)) {
+            if (budget.dealAmountMax() == null) {
+                missingFields.add("dealAmountMax");
+            }
+            return;
+        }
+        if ("전세".equals(dealType)) {
+            if (budget.depositMax() == null) {
+                missingFields.add("depositMax");
+            }
+            return;
+        }
+        if ("월세".equals(dealType)) {
+            if (budget.depositMax() == null) {
+                missingFields.add("depositMax");
+            }
+            if (budget.monthlyRentMax() == null) {
+                missingFields.add("monthlyRentMax");
+            }
+        }
+    }
+
+    private BudgetSnapshot extractBudgetSnapshot(String text, String dealType) {
+        if (isBlank(dealType)) {
+            return new BudgetSnapshot(null, null, null);
+        }
+        if ("매매".equals(dealType)) {
+            return new BudgetSnapshot(extractMaxPrice(text), null, null);
+        }
+        if ("전세".equals(dealType)) {
+            return new BudgetSnapshot(null, extractMaxPrice(text), null);
+        }
+        if ("월세".equals(dealType)) {
+            return extractMonthlyRentBudget(text);
+        }
+        return new BudgetSnapshot(null, null, null);
+    }
+
+    private BudgetSnapshot extractMonthlyRentBudget(String text) {
+        Long depositMax = extractContextAmount(text, DEPOSIT_PATTERN, true);
+        Long monthlyRentMax = extractContextAmount(text, MONTHLY_RENT_PATTERN, false);
+
+        Matcher slashMatcher = SLASH_RENT_PATTERN.matcher(text);
+        while (slashMatcher.find()) {
+            depositMax = parsePlainManwon(slashMatcher.group(1));
+            monthlyRentMax = parsePlainManwon(slashMatcher.group(2));
+        }
+
+        if (depositMax == null || monthlyRentMax == null) {
+            List<Long> amounts = extractMoneyAmounts(text);
+            if (amounts.size() >= 2) {
+                if (depositMax == null) {
+                    depositMax = amounts.get(amounts.size() - 2);
+                }
+                if (monthlyRentMax == null) {
+                    monthlyRentMax = amounts.get(amounts.size() - 1);
+                }
+            }
+        }
+
+        return new BudgetSnapshot(null, depositMax, monthlyRentMax);
+    }
+
+    private Long extractContextAmount(String text, Pattern pattern, boolean allowEokUnit) {
+        Matcher matcher = pattern.matcher(text);
+        Long lastMatch = null;
+        while (matcher.find()) {
+            lastMatch = parseAmount(matcher.group(1), matcher.group(2), allowEokUnit);
+        }
+        return lastMatch;
+    }
+
+    private List<Long> extractMoneyAmounts(String text) {
+        List<Long> amounts = new ArrayList<>();
+        Matcher eokMatcher = EOK_BUDGET_PATTERN.matcher(text);
+        while (eokMatcher.find()) {
+            amounts.add(Math.round(Double.parseDouble(eokMatcher.group(1)) * 10000));
+        }
+        Matcher manwonMatcher = MANWON_BUDGET_PATTERN.matcher(text);
+        while (manwonMatcher.find()) {
+            amounts.add(parsePlainManwon(manwonMatcher.group(1)));
+        }
+        return amounts;
     }
 
     private List<String> userMessages(ChatBotRequest request) {
@@ -293,8 +399,7 @@ public class ChatBotService {
         Matcher eokMatcher = EOK_BUDGET_PATTERN.matcher(text);
         Long lastMatch = null;
         while (eokMatcher.find()) {
-            double eok = Double.parseDouble(eokMatcher.group(1));
-            lastMatch = Math.round(eok * 10000);
+            lastMatch = parseAmount(eokMatcher.group(1), "억", true);
         }
         if (lastMatch != null) {
             return lastMatch;
@@ -302,9 +407,31 @@ public class ChatBotService {
 
         Matcher manwonMatcher = MANWON_BUDGET_PATTERN.matcher(text);
         while (manwonMatcher.find()) {
-            lastMatch = Long.parseLong(manwonMatcher.group(1).replace(",", ""));
+            lastMatch = parsePlainManwon(manwonMatcher.group(1));
         }
         return lastMatch;
+    }
+
+    private Long parseAmount(String number, String unit, boolean allowEokUnit) {
+        if (isBlank(number)) {
+            return null;
+        }
+        String normalizedUnit = unit == null ? "" : unit.trim();
+        double value = Double.parseDouble(number.replace(",", ""));
+        if ("억".equals(normalizedUnit)) {
+            if (!allowEokUnit) {
+                return null;
+            }
+            return Math.round(value * 10000);
+        }
+        return Math.round(value);
+    }
+
+    private Long parsePlainManwon(String number) {
+        if (isBlank(number)) {
+            return null;
+        }
+        return Long.parseLong(number.replace(",", ""));
     }
 
     private String extractFirstMention(String text, List<String> candidates) {
@@ -353,11 +480,20 @@ public class ChatBotService {
     private record ChatConditionSnapshot(
         String locationKeyword,
         Double radiusKm,
-        Long maxPrice,
         String dealType,
+        Long dealAmountMax,
+        Long depositMax,
+        Long monthlyRentMax,
         String housingType,
         List<SurveyCategory> priorities,
         List<String> missingFields
+    ) {
+    }
+
+    private record BudgetSnapshot(
+        Long dealAmountMax,
+        Long depositMax,
+        Long monthlyRentMax
     ) {
     }
 }

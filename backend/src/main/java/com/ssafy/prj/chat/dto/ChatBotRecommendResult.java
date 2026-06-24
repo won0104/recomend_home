@@ -7,8 +7,10 @@ public record ChatBotRecommendResult(
     Double latitude,
     Double longitude,
     Double radiusKm,
-    Long maxPrice,
     String dealType,
+    Long dealAmountMax,
+    Long depositMax,
+    Long monthlyRentMax,
     String housingType,
     NeighborhoodRecommendResponse recommendation
 ) {

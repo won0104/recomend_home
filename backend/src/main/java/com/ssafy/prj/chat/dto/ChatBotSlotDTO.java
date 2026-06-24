@@ -14,13 +14,21 @@ public record ChatBotSlotDTO(
     @JsonPropertyDescription("기준 위치에서 추천 후보를 찾을 반경입니다. 단위는 km입니다.")
     Double radiusKm,
 
-    @Description("최대 예산입니다. 단위는 만원입니다. 예: 3억원은 30000, 10억원은 100000, 8천만원은 8000")
-    @JsonPropertyDescription("최대 예산입니다. 단위는 만원입니다. 예: 3억원은 30000, 10억원은 100000, 8천만원은 8000")
-    Long maxPrice,
-
     @Description("거래 유형입니다. 매매, 전세, 월세 중 사용자가 말한 값을 넣습니다.")
     @JsonPropertyDescription("거래 유형입니다. 매매, 전세, 월세 중 사용자가 말한 값을 넣습니다.")
     String dealType,
+
+    @Description("매매일 때의 최대 매매가입니다. 단위는 만원입니다. 예: 10억원은 100000")
+    @JsonPropertyDescription("매매일 때의 최대 매매가입니다. 단위는 만원입니다. 예: 10억원은 100000")
+    Long dealAmountMax,
+
+    @Description("전세 또는 월세일 때의 최대 보증금입니다. 단위는 만원입니다. 예: 5억원은 50000, 5000만원은 5000")
+    @JsonPropertyDescription("전세 또는 월세일 때의 최대 보증금입니다. 단위는 만원입니다. 예: 5억원은 50000, 5000만원은 5000")
+    Long depositMax,
+
+    @Description("월세일 때의 최대 월세입니다. 단위는 만원입니다. 예: 월세 100만원은 100")
+    @JsonPropertyDescription("월세일 때의 최대 월세입니다. 단위는 만원입니다. 예: 월세 100만원은 100")
+    Long monthlyRentMax,
 
     @Description("주거 형태입니다. 아파트, 원룸, 오피스텔, 빌라 등 사용자가 말한 값을 넣습니다.")
     @JsonPropertyDescription("주거 형태입니다. 아파트, 원룸, 오피스텔, 빌라 등 사용자가 말한 값을 넣습니다.")
