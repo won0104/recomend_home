@@ -562,36 +562,52 @@ onMounted(() => {
         <!-- 2단 본문 -->
         <div class="nr-detail-body">
 
-          <!-- 왼쪽: 강점 분석 -->
+          <!-- 왼쪽: 생활 분석 + AI 요약 -->
           <section class="nr-detail-left">
-            <h3 class="nr-detail-section-title">동네 생활 분석</h3>
+            <div class="nr-detail-analysis-card">
+              <h3 class="nr-detail-section-title">동네 생활 분석</h3>
 
-            <ul class="nr-detail-score-list">
-              <li
-                v-for="cs in selectedNeighborhood.categoryScores"
-                :key="cs.category"
-                class="nr-detail-score-item"
-              >
-                <div class="nr-detail-score-item__head">
-                  <span class="nr-detail-score-item__name">{{ categoryLabel[cs.category] ?? cs.category }}</span>
-                  <span
-                    class="nr-detail-score-item__level"
-                    :class="`nr-detail-score-item__level--${scoreLevel(cs.score)}`"
-                  >{{ { high: '우수', mid: '보통', low: '부족' }[scoreLevel(cs.score)] }}</span>
-                  <span class="nr-detail-score-item__num">{{ cs.score.toFixed(0) }}점</span>
-                </div>
-                <div class="nr-detail-score-bar-wrap">
-                  <div
-                    class="nr-detail-score-bar"
-                    :class="`nr-detail-score-bar--${scoreLevel(cs.score)}`"
-                    :style="{ width: cs.score.toFixed(0) + '%' }"
-                  ></div>
-                </div>
-                <p class="nr-detail-score-item__desc">
-                  {{ categoryDesc[cs.category]?.[scoreLevel(cs.score)] }}
-                </p>
-              </li>
-            </ul>
+              <ul class="nr-detail-score-list">
+                <li
+                  v-for="cs in selectedNeighborhood.categoryScores"
+                  :key="cs.category"
+                  class="nr-detail-score-item"
+                >
+                  <div class="nr-detail-score-item__head">
+                    <span class="nr-detail-score-item__name">{{ categoryLabel[cs.category] ?? cs.category }}</span>
+                    <span
+                      class="nr-detail-score-item__level"
+                      :class="`nr-detail-score-item__level--${scoreLevel(cs.score)}`"
+                    >{{ { high: '우수', mid: '보통', low: '부족' }[scoreLevel(cs.score)] }}</span>
+                    <span class="nr-detail-score-item__num">{{ cs.score.toFixed(0) }}점</span>
+                  </div>
+                  <div class="nr-detail-score-bar-wrap">
+                    <div
+                      class="nr-detail-score-bar"
+                      :class="`nr-detail-score-bar--${scoreLevel(cs.score)}`"
+                      :style="{ width: cs.score.toFixed(0) + '%' }"
+                    ></div>
+                  </div>
+                  <p class="nr-detail-score-item__desc">
+                    {{ categoryDesc[cs.category]?.[scoreLevel(cs.score)] }}
+                  </p>
+                </li>
+              </ul>
+            </div>
+
+            <section class="nr-detail-ai-summary-card">
+              <div class="nr-detail-ai-summary-card__head">
+                <h3 class="nr-detail-section-title">AI가 분석한 동네 요약</h3>
+              </div>
+              <p class="nr-detail-ai-summary-lead">
+                {{ selectedNeighborhood.dongName }}은 현재 설정한 조건을 기준으로 생활 환경과 주거 조건의 균형이 돋보이는 지역이에요.
+              </p>
+              <ul class="nr-detail-ai-summary-list">
+                <li>선호한 생활 요소를 일상에서 편하게 누릴 수 있는 후보지로 보여요.</li>
+                <li>매물의 거래 조건과 실제 생활 동선은 함께 비교해 보면 더 좋아요.</li>
+                <li>이 문구는 화면 구성을 위한 임시 AI 분석 예시입니다.</li>
+              </ul>
+            </section>
           </section>
 
           <!-- 오른쪽: 지도 + 매물 목록 -->
