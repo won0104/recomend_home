@@ -68,7 +68,6 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         List<SurveyCategory> priorities = toSurveyCategories(request.getPriorities());
 
         NeighborhoodRecommendResponse response = new NeighborhoodRecommendResponse();
-        response.setLegalDongCodes(legalDongCodes);
         response.setTotalCount(legalDongCodes.size());
         response.setPriorities(priorities.stream().map(Enum::name).toList());
 
@@ -162,8 +161,7 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
     }
 
     /**
-     * 요청 문자열을 enum으로 바꾸고, 이전 프론트의 임시 식별자도 호환 처리한다.
-     * 현재 프론트는 enum 이름을 그대로 보내지만 HEALTH/MARKET을 보내던 기존 화면도 깨지지 않는다.
+     * 요청 문자열을 점수 계산기가 사용하는 enum으로 변환하고, 값의 개수와 중복을 검증한다.
      */
     private List<SurveyCategory> toSurveyCategories(List<String> priorities) {
         List<String> normalized = priorities == null ? List.of() : priorities.stream()
@@ -171,7 +169,6 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             .map(String::trim)
             .filter(priority -> !priority.isEmpty())
             .map(priority -> priority.toUpperCase(Locale.ROOT))
-            .map(this::normalizeLegacyPriority)
             .toList();
 
         if (normalized.size() != 3) {
@@ -188,15 +185,6 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("지원하지 않는 생활 우선순위가 포함되어 있습니다: " + normalized);
         }
-    }
-
-    /** 과거 화면의 임시 id를 현재 설문 카테고리 이름으로만 치환한다. */
-    private String normalizeLegacyPriority(String priority) {
-        return switch (priority) {
-            case "HEALTH" -> SurveyCategory.CULTURE.name();
-            case "MARKET" -> SurveyCategory.SHOPPING.name();
-            default -> priority;
-        };
     }
 
     /** 코드로 조회한 지역명 결과를 점수·순위 객체에 합친다. */
@@ -441,9 +429,4 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         }
     }
 
-    private void validateRange(String label, Integer min, Integer max) {
-        if (min != null && max != null && min > max) {
-            throw new IllegalArgumentException(label + " 최소값은 최대값보다 클 수 없습니다.");
-        }
-    }
 }

@@ -6,7 +6,6 @@ import java.util.List;
 public class NeighborhoodRecommendResponse {
 
     private int totalCount;
-    private List<String> legalDongCodes = new ArrayList<>();
     private List<String> priorities = new ArrayList<>();
     /** 프론트 화면에 표시할 최종 상위 3개 추천 결과다. */
     private List<RecommendedNeighborhood> recommendations = new ArrayList<>();
@@ -17,14 +16,6 @@ public class NeighborhoodRecommendResponse {
 
     public void setTotalCount(int totalCount) {
         this.totalCount = totalCount;
-    }
-
-    public List<String> getLegalDongCodes() {
-        return legalDongCodes;
-    }
-
-    public void setLegalDongCodes(List<String> legalDongCodes) {
-        this.legalDongCodes = legalDongCodes;
     }
 
     public List<String> getPriorities() {
