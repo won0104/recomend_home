@@ -29,7 +29,9 @@ function makeMarkerEl(index, place) {
   const el = document.createElement('div')
   el.style.cssText = [
     'width:30px;height:30px;border-radius:50%;',
-    'background:#079455;color:#fff;font-weight:800;font-size:13px;',
+    // 검색 직후에는 후보 장소 전체를 보조 상태로 보여 주고,
+    // 사용자가 고른 한 장소만 selectPlace에서 진한 색으로 강조한다.
+    'background:rgb(7 148 85 / 0.5);color:#fff;font-weight:800;font-size:13px;',
     'display:flex;align-items:center;justify-content:center;',
     'border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.28);',
     'cursor:pointer;transition:transform .15s,background .15s;user-select:none;',

@@ -42,17 +42,21 @@ function lifestyleRank(id) {
 <template>
   <div class="lifestyle-card">
     <aside class="lifestyle-side">
-      <div>
-        <h2>중요한 생활환경을 순서대로 선택해주세요.</h2>
-        <p>선택한 순서가 우선순위가 되며, 최대 3개까지 선택할 수 있어요.</p>
+      <div class="lifestyle-guide">
+        <h2>중요하다고 생각하는 조건을 <br> 순서대로 선택해주세요.</h2>
+        <p>선택한 순서가 우선순위가 되며, <br> 최대 3개까지 선택할 수 있어요.</p>
       </div>
-      
+
       <div class="priority-box">
         <strong>선택 현황</strong>
         <p v-if="rankedLifestyleOptions.length === 0" class="priority-empty">아직 선택한 항목이 없습니다.</p>
         <ol>
           <li v-for="(option, index) in rankedLifestyleOptions" :key="option.id">
-            <span>{{ index + 1 }}순위</span>{{ option.title }}
+            <span class="priority-rank" aria-hidden="true">{{ index + 1 }}</span>
+            <div >
+<!--              <small>{{ index + 1 }}순위</small>-->
+              <strong>{{ option.title }}</strong>
+            </div>
           </li>
         </ol>
       </div>

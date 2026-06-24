@@ -153,107 +153,7 @@ hr { border: 0; border-top: 1px solid var(--divider); margin: 1rem 0; }
 .gov-bar a:hover { color: #fff; }
 .gov-bar .gov-bar-links { display: flex; gap: 14px; }
 
-/* ===== Top header (logo + nav) ===== */
-.site-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-.site-header .site-header-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  min-height: 76px;
-  padding: 12px 32px;
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) 1fr minmax(260px, auto);
-  align-items: center;
-  gap: 18px;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 19px;
-  font-weight: 800;
-  color: var(--text);
-  letter-spacing: 0;
-  line-height: 1.15;
-  min-width: 0;
-}
-.brand:hover { text-decoration: none; color: var(--text); }
-.brand .brand-mark {
-  flex: 0 0 auto;
-  width: 32px; height: 32px;
-  border-radius: 6px;
-  background: var(--primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary-ink);
-  font-weight: 800;
-  font-size: 13px;
-  letter-spacing: 0;
-}
-.brand small {
-  display: block;
-  margin-top: 7px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-  letter-spacing: 0;
-  line-height: 1.2;
-}
-
-.main-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-}
-.main-nav a.nav-link {
-  padding: 8px 14px;
-  color: var(--text);
-  font-weight: 600;
-  font-size: 14px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-.main-nav a.nav-link:hover { background: var(--bg-soft); text-decoration: none; }
-.main-nav a.nav-link.is-active {
-  color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.header-auth {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-.header-auth .badge {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 980px) {
-  .site-header .site-header-inner {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    padding: 14px 20px;
-  }
-  .main-nav {
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-  .header-auth {
-    justify-content: flex-start;
-  }
-}
+/* ===== Top header — 스타일은 SiteHeader.vue <style scoped> 에서 관리 ===== */
 
 /* ===== Page hero (관공서 타이틀바) ===== */
 .page-hero {
@@ -1388,10 +1288,15 @@ dl.row dd {
   letter-spacing: 0;
 }
 .condition-card-head h2::before {
-  content: "◎";
-  margin-right: 8px;
-  color: #079455;
-  font-size: 21px;
+  /* 제목의 의미와 무관한 특수문자 대신, 모든 조건 카드에서 공통으로 쓰는 강조선이다. */
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 22px;
+  margin-right: 10px;
+  border-radius: 999px;
+  background: #079455;
+  vertical-align: -4px;
 }
 .condition-card-head p {
   margin: 16px 0 0;
@@ -1517,13 +1422,13 @@ dl.row dd {
   letter-spacing: 0;
 }
 .budget-icon {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #079455;
-  font-size: 20px;
+  /* 예산·거래유형 카드에 남아 있던 네모/이모지 장식을 제목 강조선으로 통일한다. */
+  width: 4px;
+  height: 22px;
+  flex: 0 0 4px;
+  border-radius: 999px;
+  background: #079455;
+  font-size: 0;
 }
 .budget-section {
   margin-bottom: 28px;
@@ -1630,36 +1535,43 @@ dl.row dd {
 }
 .lifestyle-card {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  gap: 24px;
-  max-width: 980px;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 36px;
+  max-width: 1080px;
   margin: 0 auto;
 }
 .lifestyle-side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px 16px;
+  align-items: center;
+  gap: 22px;
+  padding: 24px 20px;
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.7;
 }
 .lifestyle-side h2 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--text);
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 900;
-  line-height: 1.5;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.lifestyle-guide {
+  text-align: center;
 }
 .lifestyle-side p {
   margin: 0;
 }
 .ai-helper-box,
 .priority-box {
-  padding: 16px;
+  padding: 18px;
+  width: 100%;
+  max-width: 200px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
-  background: var(--surface-soft);
+  border-radius: 12px;
+  background: #f8fafc;
 }
 .ai-helper-box strong {
   color: #079455;
@@ -1668,6 +1580,7 @@ dl.row dd {
   display: block;
   margin-bottom: 12px;
   color: var(--text);
+  text-align: center;
 }
 .priority-empty {
   margin: 0;
@@ -1676,36 +1589,57 @@ dl.row dd {
 }
 .priority-box ol {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .priority-box li {
   display: flex;
-  gap: 8px;
+  gap: 15px;
   align-items: center;
-  color: var(--text);
-  font-weight: 700;
 }
-.priority-box li span {
-  color: var(--text-muted);
+.priority-rank {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  background: #e8f8ef;
+  color: #079455;
   font-size: 12px;
   font-weight: 800;
 }
+.priority-box li div { display: grid; gap: 1px; text-align: left; }
+.priority-box li small { color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.priority-box li strong {
+  /* 상단 '선택 현황' 제목의 margin-bottom이 항목명에 상속되지 않게 분리한다. */
+  display: block;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+}
 .lifestyle-main {
   min-width: 0;
+  padding-top: 18px;
 }
 .lifestyle-grid {
+  /* 7개 카드를 4개·3개로 줄바꿈하고, 마지막 3개도 가운데에 배치한다. */
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
-  padding: 16px 8px;
+  gap: 16px;
+  padding: 30px 0px;
 }
 .lifestyle-option {
-  width: calc(25% - 10.5px);
-  min-width: 130px;
+  /* 한 줄에 4개가 같은 너비로 들어가도록 카드 폭을 고정한다. */
+  width: calc((100% - 48px) / 4);
+  flex: 0 0 calc((100% - 48px) / 4);
+  min-width: 0;
   position: relative;
   min-height: 118px;
   padding: 18px 14px 16px;
@@ -1724,18 +1658,8 @@ dl.row dd {
   background: #ecfdf3;
   box-shadow: inset 0 0 0 1px #079455;
 }
-.lifestyle-option.is-selected::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -8px;
-  width: 14px;
-  height: 14px;
-  background: #ecfdf3;
-  border-right: 1px solid #079455;
-  border-bottom: 1px solid #079455;
-  transform: translateX(-50%) rotate(45deg);
-}
+/* 선택 상태는 테두리·배경·순위 배지만으로 표시한다. 카드 아래의 삼각형 장식은 사용하지 않는다. */
+.lifestyle-option.is-selected::after { content: none; }
 .rank-badge {
   position: absolute;
   top: 8px;
@@ -1761,11 +1685,17 @@ dl.row dd {
   border-radius: 8px;
   background: #f2fbf7;
 }
+.priority-box li > div {
+    flex: 1;
+    align-items: center;
+}
 .lifestyle-question strong {
-  display: block;
-  margin-bottom: 14px;
-  color: var(--text);
-  font-size: 14px;
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    color: var(--text);
+    font-size: 14px;
+    text-align: center;
 }
 .lifestyle-mood-options {
   display: grid;
@@ -2017,7 +1947,8 @@ dl.row dd {
     flex-direction: column;
   }
   .lifestyle-grid .lifestyle-option {
-    width: calc(50% - 7px);
+    width: calc(50% - 8px);
+    flex-basis: calc(50% - 8px);
   }
   .lifestyle-mood-options,
   .lifestyle-actions,
