@@ -27,9 +27,11 @@
         <result column="address" property="address" />
     </resultMap>
 
-    <select id="search" parameterType="SearchCondition" resultMap="transactionMap">
-        <bind name="dealYear" value="dealYmd != null and dealYmd.trim().length() &gt;= 4 ? dealYmd.trim().substring(0, 4) : null" />
-        <bind name="dealMonth" value="dealYmd != null and dealYmd.trim().length() &gt;= 6 ? dealYmd.trim().substring(4, 6) : null" />
+    <!--
+        매매와 전월세는 원천 테이블을 분리하되, 화면에는 같은 거래 형태로 돌려준다.
+        전월세 amount는 기존 목록 호환을 위해 보증금으로 두고, 실제 구분은 deposit·monthly_rent로 한다.
+    -->
+    <sql id="transactionUnion">
         SELECT
             CAST(hd.no AS CHAR) AS id,
             hd.apt_seq,
@@ -62,12 +64,70 @@
         FROM housedeals hd
         JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
         LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <!-- UNION ALL 이전에 매매 원본을 먼저 줄여, 불필요한 전국 행 조합을 피한다. -->
+        <include refid="preUnionDealFilters" />
+
+        UNION ALL
+
+        SELECT
+            CONCAT('rent-', hr.rent_id) AS id,
+            hr.apt_seq,
+            'apt' AS housing_type,
+            'rent' AS contract_type,
+            COALESCE(hi.apt_nm, '') AS name,
+            COALESCE(hi.umd_nm, '') AS dong,
+            COALESCE(hi.umd_nm, '') AS emd,
+            COALESCE(hi.jibun, '') AS lot,
+            COALESCE(hi.sgg_cd, '') AS region_code,
+            COALESCE(dc.sido_name, '') AS sido,
+            COALESCE(dc.gugun_name, '') AS sigungu,
+            hr.deposit AS amount,
+            hr.deposit,
+            hr.monthly_rent,
+            hr.exclu_use_ar AS area,
+            CAST(REPLACE(COALESCE(hr.floor, '0'), ',', '') AS SIGNED) AS floor,
+            hi.build_year AS built_year,
+            CASE
+                WHEN hr.deal_year &gt; 0 AND hr.deal_month &gt; 0 AND hr.deal_day &gt; 0
+                    THEN DATE_FORMAT(STR_TO_DATE(CONCAT(hr.deal_year, LPAD(hr.deal_month, 2, '0'), LPAD(hr.deal_day, 2, '0')), '%Y%m%d'), '%Y-%m-%d')
+                ELSE ''
+            END AS date,
+            CASE
+                WHEN hr.deal_year &gt; 0 AND hr.deal_month &gt; 0
+                    THEN CONCAT(hr.deal_year, LPAD(hr.deal_month, 2, '0'))
+                ELSE ''
+            END AS deal_ymd,
+            TRIM(REGEXP_REPLACE(CONCAT(COALESCE(dc.sido_name, ''), ' ', COALESCE(dc.gugun_name, ''), ' ', COALESCE(hi.umd_nm, ''), ' ', COALESCE(hi.jibun, '')), '[[:space:]]+', ' ')) AS address
+        FROM houserents hr
+        JOIN houseinfos hi ON hr.apt_seq = hi.apt_seq
+        LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <!-- UNION ALL 이전에 전월세 원본을 먼저 줄여, 불필요한 전국 행 조합을 피한다. -->
+        <include refid="preUnionRentFilters" />
+    </sql>
+
+    <!--
+        목록·통계 쿼리는 매매와 전월세를 UNION ALL로 합친다.
+        이 필터들은 합치기 전에 각 원본 테이블에 적용한다. 바깥 transactionFilters도 그대로 유지해
+        API의 기존 조건 의미를 보장하고, 여기서는 인덱스를 탈 수 있는 지역·연월·거래유형 조건을
+        최대한 먼저 적용해 작업량을 줄이는 역할만 맡긴다.
+    -->
+    <sql id="preUnionDealFilters">
         <where>
+            <if test="housingType != null and housingType.trim() != '' and housingType.toLowerCase() != 'all' and housingType.toLowerCase() != 'apt'">
+                AND 1 = 0
+            </if>
+            <!-- 전월세 요청 또는 전세/월세 세부 요청에서는 매매 원본을 읽지 않는다. -->
+            <if test="contractType != null and contractType.trim() != '' and contractType.toLowerCase() == 'rent'">
+                AND 1 = 0
+            </if>
+            <if test="rentType != null and rentType.trim() != '' and (rentType.toLowerCase() == 'jeonse' or rentType.toLowerCase() == 'monthly')">
+                AND 1 = 0
+            </if>
             <if test="dealYear != null">
-                AND hd.deal_year = CAST(#{dealYear} AS UNSIGNED)
+                AND hd.deal_year = #{dealYear}
             </if>
             <if test="dealMonth != null">
-                AND hd.deal_month = CAST(#{dealMonth} AS UNSIGNED)
+                AND hd.deal_month = #{dealMonth}
             </if>
             <if test="lawdCd != null and lawdCd.trim() != ''">
                 AND hi.sgg_cd = #{lawdCd}
@@ -75,12 +135,134 @@
             <if test="dong != null and dong.trim() != ''">
                 AND hi.umd_nm LIKE CONCAT('%', #{dong}, '%')
             </if>
-            <if test="keyword != null and keyword.trim() != ''">
-                AND (hi.apt_nm LIKE CONCAT('%', #{keyword}, '%')
-                     OR hi.umd_nm LIKE CONCAT('%', #{keyword}, '%'))
+        </where>
+    </sql>
+
+    <sql id="preUnionRentFilters">
+        <where>
+            <if test="housingType != null and housingType.trim() != '' and housingType.toLowerCase() != 'all' and housingType.toLowerCase() != 'apt'">
+                AND 1 = 0
+            </if>
+            <!-- 매매 요청에서는 전월세 원본을 읽지 않는다. -->
+            <if test="contractType != null and contractType.trim() != '' and contractType.toLowerCase() == 'deal'">
+                AND 1 = 0
+            </if>
+            <if test="dealYear != null">
+                AND hr.deal_year = #{dealYear}
+            </if>
+            <if test="dealMonth != null">
+                AND hr.deal_month = #{dealMonth}
+            </if>
+            <!-- 월세 0은 전세, 0 초과는 월세라는 houserents 저장 규칙을 사용한다. -->
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'jeonse'">
+                AND hr.monthly_rent = 0
+            </if>
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'monthly'">
+                AND hr.monthly_rent &gt; 0
+            </if>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND hi.sgg_cd = #{lawdCd}
+            </if>
+            <if test="dong != null and dong.trim() != ''">
+                AND hi.umd_nm LIKE CONCAT('%', #{dong}, '%')
             </if>
         </where>
-        ORDER BY hd.deal_year DESC, hd.deal_month DESC, hd.deal_day DESC, hd.no DESC
+    </sql>
+
+    <sql id="transactionFilters">
+        <where>
+            <if test="dealYear != null">
+                AND tx.deal_ymd LIKE CONCAT(#{dealYear}, '%')
+            </if>
+            <if test="dealMonth != null">
+                AND tx.deal_ymd = CONCAT(#{dealYear}, #{dealMonth})
+            </if>
+            <if test="contractType != null and contractType.trim() != '' and contractType.toLowerCase() != 'all'">
+                AND LOWER(tx.contract_type) = LOWER(#{contractType})
+            </if>
+            <!-- rentType을 지정하면 전월세 행만 대상으로 하고, 월세 0원을 전세로 판별한다. -->
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'jeonse'">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent = 0
+            </if>
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'monthly'">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent &gt; 0
+            </if>
+            <if test="housingType != null and housingType.trim() != '' and housingType.toLowerCase() != 'all' and housingType.toLowerCase() != 'apt'">
+                AND 1 = 0
+            </if>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND tx.region_code = #{lawdCd}
+            </if>
+            <if test="dong != null and dong.trim() != ''">
+                AND tx.dong LIKE CONCAT('%', #{dong}, '%')
+            </if>
+            <if test="keyword != null and keyword.trim() != ''">
+                AND (tx.name LIKE CONCAT('%', #{keyword}, '%')
+                     OR tx.dong LIKE CONCAT('%', #{keyword}, '%')
+                     OR tx.address LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <!-- 매매가 조건은 매매 행에만 적용한다. 전월세 보증금을 매매가와 섞지 않는다. -->
+            <if test="dealAmountMin != null">
+                AND tx.contract_type = 'deal'
+                AND tx.amount &gt;= #{dealAmountMin}
+            </if>
+            <if test="dealAmountMax != null">
+                AND tx.contract_type = 'deal'
+                AND tx.amount &lt;= #{dealAmountMax}
+            </if>
+            <!-- 보증금은 전세와 월세 모두에 적용한다. -->
+            <if test="depositMin != null">
+                AND tx.contract_type = 'rent'
+                AND tx.deposit &gt;= #{depositMin}
+            </if>
+            <if test="depositMax != null">
+                AND tx.contract_type = 'rent'
+                AND tx.deposit &lt;= #{depositMax}
+            </if>
+            <!-- 월세 조건은 월세 금액 자체를 필터링한다. 전세는 rentType=jeonse로 분리한다. -->
+            <if test="monthlyRentMin != null">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent &gt;= #{monthlyRentMin}
+            </if>
+            <if test="monthlyRentMax != null">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent &lt;= #{monthlyRentMax}
+            </if>
+        </where>
+    </sql>
+
+    <select id="search" parameterType="SearchCondition" resultMap="transactionMap">
+        <bind name="dealYear" value="dealYmd != null and dealYmd.trim().length() &gt;= 4 ? dealYmd.trim().substring(0, 4) : null" />
+        <bind name="dealMonth" value="dealYmd != null and dealYmd.trim().length() &gt;= 6 ? dealYmd.trim().substring(4, 6) : null" />
+        SELECT
+            tx.id, tx.apt_seq, tx.housing_type, tx.contract_type, tx.name, tx.dong, tx.emd, tx.lot,
+            tx.region_code, tx.sido, tx.sigungu, tx.amount, tx.deposit, tx.monthly_rent, tx.area,
+            tx.floor, tx.built_year, tx.date, tx.deal_ymd, tx.address
+        FROM (
+            <include refid="transactionUnion" />
+        ) tx
+        <include refid="transactionFilters" />
+        ORDER BY tx.date DESC, tx.id DESC
         LIMIT 1000
+    </select>
+
+    <!--
+        상단 카드용 전체 통계 쿼리다. 화면 목록과 같은 매매·전월세 합산 조건을 적용하지만 LIMIT를 두지 않는다.
+        평균 매매가는 매매 행만 대상으로 계산한다. 전월세는 보증금·월세의 의미가 달라 평균에 섞지 않는다.
+    -->
+    <select id="summarize" parameterType="SearchCondition" resultType="TransactionSummary">
+        <bind name="dealYear" value="dealYmd != null and dealYmd.trim().length() &gt;= 4 ? dealYmd.trim().substring(0, 4) : null" />
+        <bind name="dealMonth" value="dealYmd != null and dealYmd.trim().length() &gt;= 6 ? dealYmd.trim().substring(4, 6) : null" />
+        SELECT
+            COUNT(*) AS total_count,
+            SUM(CASE WHEN tx.contract_type = 'deal' THEN 1 ELSE 0 END) AS deal_count,
+            SUM(CASE WHEN tx.contract_type = 'rent' THEN 1 ELSE 0 END) AS rent_count,
+            COALESCE(ROUND(AVG(CASE WHEN tx.contract_type = 'deal' THEN tx.amount END)), 0) AS avg_deal_amount
+        FROM (
+            <include refid="transactionUnion" />
+        ) tx
+        <include refid="transactionFilters" />
     </select>
 </mapper>

@@ -2,6 +2,9 @@ package com.ssafy.prj.batch.tasklet;
 
 import java.io.StringReader;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.YearMonth;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -35,6 +38,9 @@ import com.ssafy.prj.batch.shared.BatchContextKeys;
 @Component
 public class EstateMarketCollectTasklet implements Tasklet {
 
+    /** 대량 INSERT 문을 적절한 크기로 나눠 MySQL 패킷과 SQL 길이 부담을 낮춘다. */
+    private static final int ITEM_INSERT_CHUNK_SIZE = 500;
+
     private final RestClient restClient = RestClient.create();
     private final EstateMarketBatchDao estateMarketBatchDao;
 
@@ -49,6 +55,10 @@ public class EstateMarketCollectTasklet implements Tasklet {
 
     @Value("${batch.estate.lawd-codes:}")
     private String lawdCodes;
+
+    /** 비어 있지 않으면 dongcodes에서 해당 시·도의 시군구 코드만 조회한다. */
+    @Value("${batch.estate.sido-name:}")
+    private String sidoName;
 
     @Value("${batch.estate.deal-ymd:}")
     private String configuredDealYmd;
@@ -74,6 +84,10 @@ public class EstateMarketCollectTasklet implements Tasklet {
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        // 외부 API가 일시 실패했을 때 로컬 거래 데이터로 대체 조회해도 테이블 누락으로 실패하지 않게 한다.
+        estateMarketBatchDao.createHouseInfoTable();
+        estateMarketBatchDao.createHouseDealsTable();
+
         List<String> targetLawdCodes = resolveLawdCodes();
         List<String> targetDealYmds = resolveDealYmds();
         String reportId = "ESTATE-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
@@ -93,10 +107,25 @@ public class EstateMarketCollectTasklet implements Tasklet {
         }
 
         EstateMarketReport report = buildReport(reportId, targetLawdCodes, targetDealYmds, items);
+
+        /*
+         * 이전 구현은 items 전체를 ExecutionContext에 넣어 다음 Step으로 전달했다.
+         * 2,067건처럼 데이터가 커지면 Spring Batch 메타 테이블의 SERIALIZED_CONTEXT가 넘쳐
+         * Job 자체가 실패한다. 따라서 원본 거래 목록은 배치 전용 테이블에 저장하고,
+         * ExecutionContext에는 작고 안전한 reportId만 남긴다.
+         */
+        estateMarketBatchDao.createReportTable();
+        estateMarketBatchDao.widenReportDealYmdColumn();
+        estateMarketBatchDao.createItemTable();
+        estateMarketBatchDao.insertReport(report);
+        for (int start = 0; start < items.size(); start += ITEM_INSERT_CHUNK_SIZE) {
+            List<EstateMarketItem> chunk = items.subList(start,
+                    Math.min(start + ITEM_INSERT_CHUNK_SIZE, items.size()));
+            estateMarketBatchDao.insertItems(chunk);
+        }
+
         var ctx = chunkContext.getStepContext().getStepExecution().getJobExecution().getExecutionContext();
         ctx.put(BatchContextKeys.REPORT_ID, reportId);
-        ctx.put(BatchContextKeys.MARKET_ITEMS, new ArrayList<>(items));
-        ctx.put(BatchContextKeys.MARKET_REPORT, report);
 
         System.out.println("[EstateBatch-Collect] reportId=" + reportId
                 + ", lawdCodes=" + targetLawdCodes.size()
@@ -142,8 +171,11 @@ public class EstateMarketCollectTasklet implements Tasklet {
 
     private List<EstateMarketItem> collectOpenApiPage(String targetLawdCd, String targetDealYmd, int pageNo) {
         try {
+            // 서비스키에 포함될 수 있는 +, /, = 문자를 쿼리 파라미터에 안전하게 넣는다.
+            // 설정 파일에는 원본 키와 URL 인코딩된 키 모두 허용한다.
+            String encodedServiceKey = URLEncoder.encode(normalizeServiceKey(apiKey), StandardCharsets.UTF_8);
             URI uri = UriComponentsBuilder.fromUriString(apiUrl)
-                    .queryParam("serviceKey", apiKey)
+                    .queryParam("serviceKey", encodedServiceKey)
                     .queryParam("LAWD_CD", targetLawdCd)
                     .queryParam("DEAL_YMD", targetDealYmd)
                     .queryParam("pageNo", pageNo)
@@ -166,6 +198,12 @@ public class EstateMarketCollectTasklet implements Tasklet {
                     + ", dealYmd=" + targetDealYmd + ", page=" + pageNo + ": " + e.getMessage());
             return List.of();
         }
+    }
+
+    private String normalizeServiceKey(String configuredKey) {
+        return configuredKey.contains("%")
+                ? URLDecoder.decode(configuredKey, StandardCharsets.UTF_8)
+                : configuredKey;
     }
 
     private List<EstateMarketItem> collectFallback(List<String> targetLawdCodes, List<String> targetDealYmds) {
@@ -244,6 +282,9 @@ public class EstateMarketCollectTasklet implements Tasklet {
     }
 
     private List<String> resolveLawdCodes() {
+        if (!isBlank(sidoName)) {
+            return estateMarketBatchDao.selectLawdCodesBySido(sidoName.trim());
+        }
         if ("ALL".equalsIgnoreCase(lawdCodes.trim())) {
             return estateMarketBatchDao.selectAllLawdCodes();
         }

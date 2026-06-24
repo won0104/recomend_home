@@ -21,6 +21,10 @@ public class HouseInfo {
     private String gugunName;
     private Integer dealCount;
     private Long avgPrice;
+    // 전세·월세 목록에서 사용하는 조건 일치 거래의 집계값이다. 금액 단위는 모두 만원이다.
+    private Integer rentCount;
+    private Long avgDeposit;
+    private Long avgMonthlyRent;
 
     public HouseInfo() {
     }
@@ -75,4 +79,13 @@ public class HouseInfo {
 
     public Long getAvgPrice() { return avgPrice; }
     public void setAvgPrice(Long avgPrice) { this.avgPrice = avgPrice; }
+
+    public Integer getRentCount() { return rentCount; }
+    public void setRentCount(Integer rentCount) { this.rentCount = rentCount; }
+
+    public Long getAvgDeposit() { return avgDeposit; }
+    public void setAvgDeposit(Long avgDeposit) { this.avgDeposit = avgDeposit; }
+
+    public Long getAvgMonthlyRent() { return avgMonthlyRent; }
+    public void setAvgMonthlyRent(Long avgMonthlyRent) { this.avgMonthlyRent = avgMonthlyRent; }
 }

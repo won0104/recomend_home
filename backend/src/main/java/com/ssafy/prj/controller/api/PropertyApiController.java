@@ -24,38 +24,64 @@ public class PropertyApiController {
     private final RealEstateService realEstateService;
 
     @GetMapping("/search")
-    @Operation(summary = "실거래 검색", description = "공개 API입니다. 모든 조회 파라미터는 선택값이며, 테스트할 때는 lawdCd 또는 dong부터 넣어보면 좋습니다.")
+    @Operation(summary = "매매·전월세 실거래 검색", description = "공개 API입니다. contractType은 deal(매매), rent(전월세), all(전체)이며, rentType은 all·jeonse·monthly를 사용합니다. 금액은 모두 만원 단위입니다.")
     public ResponseEntity<?> search(@Parameter(description = "주택 유형", example = "APT") @RequestParam(required = false) String housingType,
-                                    @Parameter(description = "계약 유형", example = "SALE") @RequestParam(required = false) String contractType,
+                                    @Parameter(description = "거래 유형: deal, rent, all", example = "rent") @RequestParam(required = false) String contractType,
+                                    @Parameter(description = "전월세 유형: all, jeonse, monthly", example = "monthly") @RequestParam(required = false) String rentType,
                                     @Parameter(description = "거래 년월 또는 일자", example = "202401") @RequestParam(required = false) String dealYmd,
                                     @Parameter(description = "법정동 코드", example = "11680") @RequestParam(required = false) String lawdCd,
                                     @Parameter(description = "동명", example = "개포동") @RequestParam(required = false) String dong,
-                                    @Parameter(description = "아파트명 또는 주소 검색어", example = "래미안") @RequestParam(required = false) String keyword) throws Exception {
+                                    @Parameter(description = "아파트명 또는 주소 검색어", example = "래미안") @RequestParam(required = false) String keyword,
+                                    @Parameter(description = "매매가 최소(만원)", example = "50000") @RequestParam(required = false) Integer dealAmountMin,
+                                    @Parameter(description = "매매가 최대(만원)", example = "100000") @RequestParam(required = false) Integer dealAmountMax,
+                                    @Parameter(description = "보증금 최소(만원)", example = "1000") @RequestParam(required = false) Integer depositMin,
+                                    @Parameter(description = "보증금 최대(만원)", example = "5000") @RequestParam(required = false) Integer depositMax,
+                                    @Parameter(description = "월세 최소(만원)", example = "50") @RequestParam(required = false) Integer monthlyRentMin,
+                                    @Parameter(description = "월세 최대(만원)", example = "150") @RequestParam(required = false) Integer monthlyRentMax) throws Exception {
         return ResponseEntity.ok(ApiResponse.ok("거래 검색 결과입니다.",
-                realEstateService.search(condition(housingType, contractType, dealYmd, lawdCd, dong, keyword))));
+                realEstateService.search(condition(housingType, contractType, rentType, dealYmd, lawdCd, dong, keyword,
+                        dealAmountMin, dealAmountMax, depositMin, depositMax, monthlyRentMin, monthlyRentMax))));
     }
 
     @GetMapping("/summary")
-    @Operation(summary = "실거래 요약", description = "공개 API입니다. 실거래 검색과 같은 필터를 사용해 요약 값을 반환합니다.")
+    @Operation(summary = "매매·전월세 실거래 요약", description = "공개 API입니다. 검색과 같은 거래·보증금·월세 조건으로 전체·매매·전월세 건수를 집계하고, 평균 매매가는 매매만 대상으로 반환합니다.")
     public ResponseEntity<?> summary(@Parameter(description = "주택 유형", example = "APT") @RequestParam(required = false) String housingType,
-                                     @Parameter(description = "계약 유형", example = "SALE") @RequestParam(required = false) String contractType,
+                                     @Parameter(description = "거래 유형: deal, rent, all", example = "rent") @RequestParam(required = false) String contractType,
+                                     @Parameter(description = "전월세 유형: all, jeonse, monthly", example = "monthly") @RequestParam(required = false) String rentType,
                                      @Parameter(description = "거래 년월 또는 일자", example = "202401") @RequestParam(required = false) String dealYmd,
                                      @Parameter(description = "법정동 코드", example = "11680") @RequestParam(required = false) String lawdCd,
                                      @Parameter(description = "동명", example = "개포동") @RequestParam(required = false) String dong,
-                                     @Parameter(description = "아파트명 또는 주소 검색어", example = "래미안") @RequestParam(required = false) String keyword) throws Exception {
+                                     @Parameter(description = "아파트명 또는 주소 검색어", example = "래미안") @RequestParam(required = false) String keyword,
+                                     @Parameter(description = "매매가 최소(만원)", example = "50000") @RequestParam(required = false) Integer dealAmountMin,
+                                     @Parameter(description = "매매가 최대(만원)", example = "100000") @RequestParam(required = false) Integer dealAmountMax,
+                                     @Parameter(description = "보증금 최소(만원)", example = "1000") @RequestParam(required = false) Integer depositMin,
+                                     @Parameter(description = "보증금 최대(만원)", example = "5000") @RequestParam(required = false) Integer depositMax,
+                                     @Parameter(description = "월세 최소(만원)", example = "50") @RequestParam(required = false) Integer monthlyRentMin,
+                                     @Parameter(description = "월세 최대(만원)", example = "150") @RequestParam(required = false) Integer monthlyRentMax) throws Exception {
         return ResponseEntity.ok(ApiResponse.ok("거래 분석 결과입니다.",
-                realEstateService.summarize(condition(housingType, contractType, dealYmd, lawdCd, dong, keyword))));
+                realEstateService.summarize(condition(housingType, contractType, rentType, dealYmd, lawdCd, dong, keyword,
+                        dealAmountMin, dealAmountMax, depositMin, depositMax, monthlyRentMin, monthlyRentMax))));
     }
 
-    private SearchCondition condition(String housingType, String contractType, String dealYmd,
-                                      String lawdCd, String dong, String keyword) {
+    private SearchCondition condition(String housingType, String contractType, String rentType, String dealYmd,
+                                      String lawdCd, String dong, String keyword,
+                                      Integer dealAmountMin, Integer dealAmountMax,
+                                      Integer depositMin, Integer depositMax,
+                                      Integer monthlyRentMin, Integer monthlyRentMax) {
         SearchCondition c = new SearchCondition();
         c.setHousingType(housingType);
         c.setContractType(contractType);
+        c.setRentType(rentType);
         c.setDealYmd(dealYmd);
         c.setLawdCd(lawdCd);
         c.setDong(dong);
         c.setKeyword(keyword);
+        c.setDealAmountMin(dealAmountMin);
+        c.setDealAmountMax(dealAmountMax);
+        c.setDepositMin(depositMin);
+        c.setDepositMax(depositMax);
+        c.setMonthlyRentMin(monthlyRentMin);
+        c.setMonthlyRentMax(monthlyRentMax);
         return c;
     }
 }

@@ -8,10 +8,15 @@ public class NeighborhoodRecommendRequest {
     private Double latitude;
     private Double longitude;
     private Double radiusKm;
-    private Integer maxPrice;
-    /** 화면에서 선택한 거래 유형. 원천 데이터 확장 시 후보·상세 필터에 연결할 값이다. */
+    /** 화면에서 선택한 거래 유형: 매매, 전세, 월세. */
     private String dealType = "매매";
-    /** 화면에서 선택한 주거 형태. 원천 데이터 확장 시 후보·상세 필터에 연결할 값이다. */
+    /** 매매가 최대값(만원). 매매 후보를 만들 때만 사용한다. */
+    private Integer dealAmountMax;
+    /** 보증금 최대값(만원). 전세·월세 후보를 만들 때 사용한다. */
+    private Integer depositMax;
+    /** 월세 최대값(만원). 월세 후보를 만들 때만 사용한다. */
+    private Integer monthlyRentMax;
+    /** 화면에서 선택한 주거 형태. 현재 원천은 아파트 중심이므로 선택값만 보존한다. */
     private String housingType = "아파트";
     private List<String> priorities = new ArrayList<>();
     private String lifestyleMood;
@@ -40,20 +45,36 @@ public class NeighborhoodRecommendRequest {
         this.radiusKm = radiusKm;
     }
 
-    public Integer getMaxPrice() {
-        return maxPrice;
-    }
-
-    public void setMaxPrice(Integer maxPrice) {
-        this.maxPrice = maxPrice;
-    }
-
     public String getDealType() {
         return dealType;
     }
 
     public void setDealType(String dealType) {
         this.dealType = dealType;
+    }
+
+    public Integer getDealAmountMax() {
+        return dealAmountMax;
+    }
+
+    public void setDealAmountMax(Integer dealAmountMax) {
+        this.dealAmountMax = dealAmountMax;
+    }
+
+    public Integer getDepositMax() {
+        return depositMax;
+    }
+
+    public void setDepositMax(Integer depositMax) {
+        this.depositMax = depositMax;
+    }
+
+    public Integer getMonthlyRentMax() {
+        return monthlyRentMax;
+    }
+
+    public void setMonthlyRentMax(Integer monthlyRentMax) {
+        this.monthlyRentMax = monthlyRentMax;
     }
 
     public String getHousingType() {

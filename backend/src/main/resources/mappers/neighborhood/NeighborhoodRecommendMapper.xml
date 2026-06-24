@@ -6,9 +6,9 @@
 
     <sql id="distanceExpression">
         (6371 * ACOS(LEAST(1, GREATEST(-1,
-            COS(RADIANS(#{originLat})) * COS(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8)))) *
-            COS(RADIANS(CAST(hi.longitude AS DECIMAL(12, 8))) - RADIANS(#{originLng})) +
-            SIN(RADIANS(#{originLat})) * SIN(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8))))
+            COS(RADIANS(#{request.latitude})) * COS(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8)))) *
+            COS(RADIANS(CAST(hi.longitude AS DECIMAL(12, 8))) - RADIANS(#{request.longitude})) +
+            SIN(RADIANS(#{request.latitude})) * SIN(RADIANS(CAST(hi.latitude AS DECIMAL(12, 8))))
         ))))
     </sql>
 
@@ -33,8 +33,8 @@
 
         해결:
           1단계 — sgg_cd 앞 2자리(시도 코드)는 행정코드이므로 항상 정확하다.
-                  시도 중심점과 기준점 간 거리가 (반경 + 150km) 초과 시 즉시 차단한다.
-                  → 서울 5km 반경: 전라남도 중심(295km) > 155km → 차단
+                  시도 중심점과 기준점 간 거리가 (반경 + 50km) 초과 시 즉시 차단한다.
+                  → 서울 5km 반경: 전라남도 중심(295km) > 55km → 차단
           2단계 — 시도 게이트를 통과한 동에 대해 동 평균 좌표로 정밀 필터를 적용한다.
     -->
     <select id="findLegalDongCodes" resultType="string">
@@ -75,35 +75,79 @@
         WHERE
             /* 1단계: 시도 중심점 게이트 — 잘못된 좌표로 인한 엉뚱한 시도 완전 차단 */
             (6371 * ACOS(LEAST(1, GREATEST(-1,
-                COS(RADIANS(#{originLat})) * COS(RADIANS(sido.slat)) *
-                COS(RADIANS(sido.slng) - RADIANS(#{originLng})) +
-                SIN(RADIANS(#{originLat})) * SIN(RADIANS(sido.slat))
-            )))) &lt;= #{radiusKm} + 50
+                COS(RADIANS(#{request.latitude})) * COS(RADIANS(sido.slat)) *
+                COS(RADIANS(sido.slng) - RADIANS(#{request.longitude})) +
+                SIN(RADIANS(#{request.latitude})) * SIN(RADIANS(sido.slat))
+            )))) &lt;= #{request.radiusKm} + 50
             /* 2단계: 동 평균 좌표 정밀 필터 */
             AND (6371 * ACOS(LEAST(1, GREATEST(-1,
-                COS(RADIANS(#{originLat})) * COS(RADIANS(dg.dong_lat)) *
-                COS(RADIANS(dg.dong_lng) - RADIANS(#{originLng})) +
-                SIN(RADIANS(#{originLat})) * SIN(RADIANS(dg.dong_lat))
-            )))) &lt;= #{radiusKm}
+                COS(RADIANS(#{request.latitude})) * COS(RADIANS(dg.dong_lat)) *
+                COS(RADIANS(dg.dong_lng) - RADIANS(#{request.longitude})) +
+                SIN(RADIANS(#{request.latitude})) * SIN(RADIANS(dg.dong_lat))
+            )))) &lt;= #{request.radiusKm}
             <!--
-                기본 예산 정책은 반경 안에 들어온 동에 대해서만 확인한다.
-                기존처럼 housedeals 전체를 먼저 JOIN하면 대량 거래 데이터 때문에 요청이 오래 걸릴 수 있다.
-                따라서 후보 동 하나의 거래만 apt_seq 인덱스로 확인하는 EXISTS 구조를 사용한다.
+                반경 안 동마다 사용자가 선택한 거래 유형의 실거래를 확인한다.
+                매매와 전세·월세는 가격 구조가 다르므로 테이블을 섞지 않고, 각 거래 유형의
+                해당 금액 범위 안 거래가 60% 이상인 동만 후보로 남긴다.
             -->
-            AND EXISTS (
-                SELECT 1
-                FROM houseinfos price_hi
-                JOIN housedeals price_hd ON price_hd.apt_seq = price_hi.apt_seq
-                WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
-                GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
-                HAVING COUNT(price_hd.no) >= 5
-                <if test="maxPrice != null">
-                    AND SUM(CASE
-                        WHEN CAST(REPLACE(COALESCE(price_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
-                        THEN 1 ELSE 0
-                    END) / COUNT(price_hd.no) &gt;= 0.60
-                </if>
-            )
+            <choose>
+                <when test="request.dealType == '전세'">
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houseinfos price_hi
+                        JOIN houserents price_hr ON price_hr.apt_seq = price_hi.apt_seq
+                            AND price_hr.monthly_rent = 0
+                        WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
+                        GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
+                        HAVING COUNT(price_hr.rent_id) >= 5
+                        <if test="request.depositMax != null">
+                            AND SUM(CASE WHEN 1 = 1
+                                <if test="request.depositMax != null">
+                                    AND price_hr.deposit &lt;= #{request.depositMax}
+                                </if>
+                                THEN 1 ELSE 0 END) / COUNT(price_hr.rent_id) &gt;= 0.60
+                        </if>
+                    )
+                </when>
+                <when test="request.dealType == '월세'">
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houseinfos price_hi
+                        JOIN houserents price_hr ON price_hr.apt_seq = price_hi.apt_seq
+                            AND price_hr.monthly_rent &gt; 0
+                        WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
+                        GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
+                        HAVING COUNT(price_hr.rent_id) >= 5
+                        <if test="request.depositMax != null or request.monthlyRentMax != null">
+                            AND SUM(CASE WHEN 1 = 1
+                                <if test="request.depositMax != null">
+                                    AND price_hr.deposit &lt;= #{request.depositMax}
+                                </if>
+                                <if test="request.monthlyRentMax != null">
+                                    AND price_hr.monthly_rent &lt;= #{request.monthlyRentMax}
+                                </if>
+                                THEN 1 ELSE 0 END) / COUNT(price_hr.rent_id) &gt;= 0.60
+                        </if>
+                    )
+                </when>
+                <otherwise>
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houseinfos price_hi
+                        JOIN housedeals price_hd ON price_hd.apt_seq = price_hi.apt_seq
+                        WHERE CONCAT(price_hi.sgg_cd, price_hi.umd_cd) = dg.legal_dong_code
+                        GROUP BY CONCAT(price_hi.sgg_cd, price_hi.umd_cd)
+                        HAVING COUNT(price_hd.no) >= 5
+                        <if test="request.dealAmountMax != null">
+                            AND SUM(CASE WHEN 1 = 1
+                                <if test="request.dealAmountMax != null">
+                                    AND CAST(REPLACE(COALESCE(price_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{request.dealAmountMax}
+                                </if>
+                                THEN 1 ELSE 0 END) / COUNT(price_hd.no) &gt;= 0.60
+                        </if>
+                    )
+                </otherwise>
+            </choose>
         ORDER BY dg.legal_dong_code
     </select>
 

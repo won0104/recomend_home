@@ -8,6 +8,7 @@ import NeighborhoodResultMap from '../components/neighborhood/NeighborhoodResult
 import PlaceSearchStep from '../components/neighborhood/PlaceSearchStep.vue'
 import RadiusStep from '../components/neighborhood/RadiusStep.vue'
 import StepIndicator from '../components/neighborhood/StepIndicator.vue'
+import TransactionHousingStep from '../components/neighborhood/TransactionHousingStep.vue'
 import { fetchHouses } from '../api/houses'
 import { recommendNeighborhood } from '../api/neighborhoods'
 import { number } from '../utils/format'
@@ -19,6 +20,8 @@ const commuteRadius = ref(15)
 const budgetAmount = ref(3)
 const dealType = ref('매매')
 const housingType = ref('아파트')
+// 월세 선택 시 월세 상한은 200만원을 기본값으로 사용한다.
+const monthlyRentMax = ref(200)
 const selectedLifestyleIds = ref([])
 const lifestyleMood = ref('green')
 const recommendLoading = ref(false)
@@ -105,19 +108,45 @@ function getWeaknessTags(categoryScores) {
 const RANK_COLORS = { 1: '#2563EB', 2: '#22C55E', 3: '#F97316' }
 
 const currentStep = computed(() => {
-  if (screen.value === 'budget') return 2
-  if (screen.value === 'lifestyle') return 3
+  if (screen.value === 'transaction') return 2
+  if (screen.value === 'budget') return 3
+  if (screen.value === 'lifestyle') return 4
   return 1
 })
 const selectedAddress = computed(() =>
   selectedPlace.value?.road_address_name || selectedPlace.value?.address_name || ''
 )
-const maxPrice = computed(() =>
-  Number(budgetAmount.value) >= 10 ? null : Math.round(Number(budgetAmount.value) * 10000)
-)
-const budgetLabel = computed(() =>
-  Number(budgetAmount.value) >= 10 ? '제한 없음' : `${budgetAmount.value}억원 이하`
-)
+const activeBudgetMax = computed(() => {
+  // 월세 보증금은 5억도 실제 상한값으로 전송한다. 매매·전세만 기존처럼 20억을 "제한 없음"으로 둔다.
+  if (dealType.value !== '월세' && Number(budgetAmount.value) >= 20) return null
+  return Math.round(Number(budgetAmount.value) * 10000)
+})
+const budgetLabel = computed(() => {
+  const maxLabel = Number(budgetAmount.value) >= 20 ? '제한 없음' : `${budgetAmount.value}억원 이하`
+  if (dealType.value === '매매') return `매매가 ${maxLabel}`
+  if (dealType.value === '전세') return `보증금 ${maxLabel}`
+  return `보증금 ${maxLabel}, 월세 ${number(monthlyRentMax.value ?? 200)}만원 이하`
+})
+/**
+ * 매매·전세·월세는 금액 구조가 다르다. 매매는 평균 매매가, 전세는 평균 보증금,
+ * 월세는 평균 보증금과 평균 월세를 함께 보여 사용자가 실제 계약 조건을 비교할 수 있게 한다.
+ */
+function averageTransactionText(house) {
+  if (savedDealType.value === '매매') {
+    if (!house.avgPrice) return '-'
+    return house.avgPrice >= 10000
+      ? `${(house.avgPrice / 10000).toFixed(1)}억`
+      : `${number(house.avgPrice)}만`
+  }
+
+  if (!house.avgDeposit) return '-'
+  const deposit = house.avgDeposit >= 10000
+    ? `${(house.avgDeposit / 10000).toFixed(1)}억`
+    : `${number(house.avgDeposit)}만`
+  if (savedDealType.value === '전세') return `보증금 ${deposit}`
+  return `보증금 ${deposit} / 월세 ${number(house.avgMonthlyRent || 0)}만`
+}
+
 const baseLocation = computed(() =>
   selectedPlace.value ? { lat: Number(selectedPlace.value.y), lng: Number(selectedPlace.value.x) } : null
 )
@@ -128,10 +157,10 @@ const recommendationCondition = computed(() => ({
   latitude: Number(selectedPlace.value?.y),
   longitude: Number(selectedPlace.value?.x),
   radiusKm: commuteRadius.value,
-  maxPrice: maxPrice.value,
-  // 거래·주거 선택값도 요청에 보존한다. 현재 DB 필터는 예산에 적용되고,
-  // 향후 전세·월세·주택 데이터가 추가되면 이 값으로 같은 조건을 연결한다.
   dealType: dealType.value,
+  dealAmountMax: dealType.value === '매매' ? activeBudgetMax.value : null,
+  depositMax: dealType.value !== '매매' ? activeBudgetMax.value : null,
+  monthlyRentMax: dealType.value === '월세' ? (monthlyRentMax.value ?? 200) : null,
   housingType: housingType.value,
   priorities: selectedLifestyleIds.value,
   lifestyleMood: lifestyleMood.value,
@@ -139,10 +168,19 @@ const recommendationCondition = computed(() => ({
 
 function handlePlaceSelect(place) { selectedPlace.value = place }
 function openRadiusStep(place) { selectedPlace.value = place; screen.value = 'radius' }
-function openBudgetStep() { screen.value = 'budget' }
+function openTransactionStep() { screen.value = 'transaction' }
+function openBudgetStep() {
+  // 매매/전세에서 큰 예산을 골랐다가 월세로 바꿔도, 월세 전용 상한을 넘는 값이 남지 않게 보정한다.
+  if (dealType.value === '월세') {
+    budgetAmount.value = Math.min(Number(budgetAmount.value), 5)
+    monthlyRentMax.value = Math.min(Number(monthlyRentMax.value ?? 200), 200)
+  }
+  screen.value = 'budget'
+}
 function openLifestyleStep() { screen.value = 'lifestyle' }
 function backToSearch() { screen.value = 'search' }
 function backToRadiusStep() { screen.value = 'radius' }
+function backToTransactionStep() { screen.value = 'transaction' }
 function backToBudgetStep() { screen.value = 'budget' }
 function backToLifestyleStep() { screen.value = 'lifestyle' }
 function backToResult() { screen.value = 'result' }
@@ -158,9 +196,11 @@ async function openDetail(rec) {
     // 동네 후보를 걸러낸 예산·거래·주거 조건을 매물 목록에도 그대로 적용한다.
     const res = await fetchHouses({
       lawdCd: rec.lawdCd,
-      maxPrice: maxPrice.value,
       dealType: dealType.value,
       housingType: housingType.value,
+      dealAmountMax: dealType.value === '매매' ? activeBudgetMax.value : undefined,
+      depositMax: dealType.value !== '매매' ? activeBudgetMax.value : undefined,
+      monthlyRentMax: dealType.value === '월세' ? (monthlyRentMax.value ?? 200) : undefined,
     })
     houseList.value = Array.isArray(res.data) ? res.data : []
   } catch {
@@ -381,7 +421,7 @@ async function submitRecommendation() {
                       <th class="text-end">건축년도</th>
                       <th class="text-center">거래 유형</th>
                       <th class="text-end">거래수</th>
-                      <th class="text-end">평균 가격</th>
+                      <th class="text-end">평균 거래 조건</th>
                       <th class="text-end"></th>
                     </tr>
                   </thead>
@@ -398,7 +438,8 @@ async function submitRecommendation() {
                       @mouseleave="highlightedAptSeq = null"
                     >
                       <td>
-                        <RouterLink :to="`/houses/${house.aptSeq}`" class="fw-bold article-link">
+                        <!-- 거래 유형을 URL에 남겨 상세 페이지를 새로고침해도 같은 전월세/매매 내역을 조회한다. -->
+                        <RouterLink :to="{ path: `/houses/${house.aptSeq}`, query: { dealType: savedDealType } }" class="fw-bold article-link">
                           {{ house.aptNm }}
                         </RouterLink>
                         <div class="small text-muted">{{ house.sidoName }} {{ house.gugunName }}</div>
@@ -409,19 +450,14 @@ async function submitRecommendation() {
                         <span class="nr-deal-badge">{{ savedDealType }}</span>
                       </td>
                       <td class="text-end">
-                        <span class="mono fw-semibold">{{ number(house.dealCount) }}</span>
+                        <span class="mono fw-semibold">
+                          {{ number(savedDealType === '매매' ? house.dealCount : house.rentCount) }}
+                        </span>
                         <span class="small text-muted"> 건</span>
                       </td>
-                      <td class="text-end mono">
-                        <template v-if="house.avgPrice">
-                          {{ house.avgPrice >= 10000
-                              ? (house.avgPrice / 10000).toFixed(1) + '억'
-                              : number(house.avgPrice) + '만' }}
-                        </template>
-                        <template v-else>-</template>
-                      </td>
+                      <td class="text-end"><span class="money money--rent">{{ averageTransactionText(house) }}</span></td>
                       <td class="text-end">
-                        <RouterLink :to="`/houses/${house.aptSeq}`" class="btn btn-outline-primary btn-sm">
+                        <RouterLink :to="{ path: `/houses/${house.aptSeq}`, query: { dealType: savedDealType } }" class="btn btn-outline-primary btn-sm">
                           상세
                         </RouterLink>
                       </td>
@@ -454,7 +490,7 @@ async function submitRecommendation() {
       <section class="place-finder-hero place-condition-hero">
         <div class="place-finder-badge">동네 추천</div>
         <h1>나만의 조건으로<br /><span>완벽한 동네</span>를 찾아보세요</h1>
-        <p>3단계 설정만으로 당신에게 딱 맞는 동네를 추천받으세요</p>
+        <p>4단계 설정으로 당신에게 딱 맞는 동네를 추천받으세요</p>
       </section>
 
       <section class="condition-setup-shell" aria-label="동네 추천 조건 설정">
@@ -465,14 +501,21 @@ async function submitRecommendation() {
           :selected-place="selectedPlace"
           :selected-address="selectedAddress"
           @prev="backToSearch"
+          @next="openTransactionStep"
+        />
+        <TransactionHousingStep
+          v-else-if="screen === 'transaction'"
+          v-model:deal-type="dealType"
+          v-model:housing-type="housingType"
+          @prev="backToRadiusStep"
           @next="openBudgetStep"
         />
         <BudgetStep
           v-else-if="screen === 'budget'"
           v-model:budget-amount="budgetAmount"
-          v-model:deal-type="dealType"
-          v-model:housing-type="housingType"
-          @prev="backToRadiusStep"
+          :deal-type="dealType"
+          v-model:monthly-rent-max="monthlyRentMax"
+          @prev="backToTransactionStep"
           @next="openLifestyleStep"
         />
         <LifestyleStep

@@ -21,10 +21,13 @@ public class HouseInfoServiceImpl implements HouseInfoService {
     @Override
     @Transactional(readOnly = true)
     public List<HouseInfo> search(String sigunguCode, String dongName, String keyword,
-            Integer maxPrice, String dealType, String housingType) throws Exception {
-        // 거래 유형·주거 형태 버튼은 프론트에서 선택 상태를 유지한다.
-        // 현재 적재된 원천 테이블에는 해당 구분 컬럼이 없어, 상세 조회에서는 예산 조건만 적용한다.
-        return houseInfoMapper.search(sigunguCode, dongName, keyword, maxPrice, dealType, housingType);
+            String dealType, String housingType,
+            Integer dealAmountMin, Integer dealAmountMax,
+            Integer depositMin, Integer depositMax,
+            Integer monthlyRentMin, Integer monthlyRentMax) throws Exception {
+        // 동네 추천 후보를 만드는 조건과 동일하게, 상세 목록에서도 거래 유형별 금액 범위를 적용한다.
+        return houseInfoMapper.search(sigunguCode, dongName, keyword, dealType, housingType,
+                dealAmountMin, dealAmountMax, depositMin, depositMax, monthlyRentMin, monthlyRentMax);
     }
 
     @Override
@@ -60,11 +63,17 @@ public class HouseInfoServiceImpl implements HouseInfoService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<RealEstateTransaction> findRecentDeals(String aptSeq, int limit) throws Exception {
+    public List<RealEstateTransaction> findRecentDeals(String aptSeq, String dealType, int limit) throws Exception {
         if (isBlank(aptSeq)) {
             return Collections.emptyList();
         }
-        return houseInfoMapper.findRecentDealsByAptSeq(aptSeq, Math.max(1, Math.min(limit, 100)));
+        // 상세 링크가 거래 유형을 전달하지 않은 기존 화면은 매매 내역을 기본값으로 사용한다.
+        String resolvedDealType = isBlank(dealType) ? "매매" : dealType.trim();
+        if (!List.of("매매", "전세", "월세").contains(resolvedDealType)) {
+            throw new IllegalArgumentException("거래 유형은 매매, 전세, 월세 중 하나여야 합니다.");
+        }
+        return houseInfoMapper.findRecentDealsByAptSeq(aptSeq, resolvedDealType,
+                Math.max(1, Math.min(limit, 100)));
     }
 
     private boolean isBlank(String value) {

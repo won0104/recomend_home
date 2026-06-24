@@ -51,16 +51,18 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
         request.setLatitude(place.latitude());
         request.setLongitude(place.longitude());
         request.setRadiusKm(slot.radiusKm());
-        request.setMaxPrice(Math.toIntExact(slot.maxPrice()));
         request.setDealType(slot.dealType());
+        applyBudget(request, slot);
         request.setHousingType(slot.housingType());
         request.setPriorities(slot.priorities().stream().map(SurveyCategory::name).toList());
-        log.info("[ChatBot-Recommend] converted request. latitude={}, longitude={}, radiusKm={}, maxPrice={}, dealType={}, housingType={}, priorities={}",
+        log.info("[ChatBot-Recommend] converted request. latitude={}, longitude={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}",
             request.getLatitude(),
             request.getLongitude(),
             request.getRadiusKm(),
-            request.getMaxPrice(),
             request.getDealType(),
+            request.getDealAmountMax(),
+            request.getDepositMax(),
+            request.getMonthlyRentMax(),
             request.getHousingType(),
             request.getPriorities());
 
@@ -110,6 +112,16 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
         if (priorities == null || priorities.size() != 3 || priorities.stream().distinct().count() != 3) {
             throw new IllegalArgumentException("우선순위는 중복 없이 정확히 3개가 필요합니다.");
         }
+    }
+
+    private void applyBudget(NeighborhoodRecommendRequest request, ChatBotSlotDTO slot) {
+        int maxPrice = Math.toIntExact(slot.maxPrice());
+        String dealType = slot.dealType() == null ? "" : slot.dealType().trim();
+        if ("매매".equals(dealType)) {
+            request.setDealAmountMax(maxPrice);
+            return;
+        }
+        request.setDepositMax(maxPrice);
     }
 
     private boolean isBlank(String value) {
