@@ -11,6 +11,7 @@ const route = useRoute()
 const active = computed(() => {
   const path = route.path
   if (path === '/' || path.startsWith('/neighborhood-recommend') || path.startsWith('/places')) return 'recommend'
+  if (path.startsWith('/chat')) return 'chatbot'
   if (path.startsWith('/home')) return 'dashboard-home'
   if (path.startsWith('/houses')) return 'houseinfo'
   if (path.startsWith('/notices')) return 'notice'
@@ -33,6 +34,7 @@ const active = computed(() => {
 
       <nav class="main-nav">
         <RouterLink to="/" class="nav-link" :class="{ 'is-active': active === 'recommend' }">동네 추천</RouterLink>
+        <RouterLink to="/chat" class="nav-link" :class="{ 'is-active': active === 'chatbot' }">AI 챗봇</RouterLink>
         <RouterLink to="/home" class="nav-link" :class="{ 'is-active': active === 'dashboard-home' }">실거래 검색</RouterLink>
         <RouterLink to="/houses" class="nav-link" :class="{ 'is-active': active === 'houseinfo' }">주택 정보</RouterLink>
         <RouterLink to="/notices" class="nav-link" :class="{ 'is-active': active === 'notice' }">공지사항</RouterLink>

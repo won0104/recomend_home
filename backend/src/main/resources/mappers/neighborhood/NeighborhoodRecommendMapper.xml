@@ -33,8 +33,8 @@
 
         해결:
           1단계 — sgg_cd 앞 2자리(시도 코드)는 행정코드이므로 항상 정확하다.
-                  시도 중심점과 기준점 간 거리가 (반경 + 150km) 초과 시 즉시 차단한다.
-                  → 서울 5km 반경: 전라남도 중심(295km) > 155km → 차단
+                  시도 중심점과 기준점 간 거리가 (반경 + 50km) 초과 시 즉시 차단한다.
+                  → 서울 5km 반경: 전라남도 중심(295km) > 55km → 차단
           2단계 — 시도 게이트를 통과한 동에 대해 동 평균 좌표로 정밀 필터를 적용한다.
     -->
     <select id="findLegalDongCodes" resultType="string">
@@ -78,7 +78,7 @@
                 COS(RADIANS(#{request.latitude})) * COS(RADIANS(sido.slat)) *
                 COS(RADIANS(sido.slng) - RADIANS(#{request.longitude})) +
                 SIN(RADIANS(#{request.latitude})) * SIN(RADIANS(sido.slat))
-            )))) &lt;= #{request.radiusKm} + 150
+            )))) &lt;= #{request.radiusKm} + 50
             /* 2단계: 동 평균 좌표 정밀 필터 */
             AND (6371 * ACOS(LEAST(1, GREATEST(-1,
                 COS(RADIANS(#{request.latitude})) * COS(RADIANS(dg.dong_lat)) *
