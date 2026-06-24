@@ -1,0 +1,171 @@
+package com.ssafy.prj.chat.service;
+
+import java.util.List;
+import java.util.function.Function;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Description;
+import org.springframework.stereotype.Component;
+
+import com.ssafy.prj.chat.dto.ChatBotRecommendResult;
+import com.ssafy.prj.chat.dto.ChatBotSlotDTO;
+import com.ssafy.prj.chat.dto.KakaoPlace;
+import com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendRequest;
+import com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendResponse;
+import com.ssafy.prj.model.service.neighborhood.NeighborhoodRecommendService;
+import com.ssafy.prj.model.service.neighborhood.SurveyCategory;
+
+import lombok.RequiredArgsConstructor;
+
+@Component("recommendNeighborhood")
+@Description("사용자가 말한 주거 조건 6가지를 기반으로 카카오 장소 검색 후 맞춤 동네 Top3를 추천합니다.")
+@RequiredArgsConstructor
+public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, ChatBotRecommendResult> {
+
+    private static final Logger log = LoggerFactory.getLogger(NeighborhoodRecommendFunction.class);
+
+    private final KakaoApiService kakaoApiService;
+    private final NeighborhoodRecommendService neighborhoodRecommendService;
+
+    @Override
+    public ChatBotRecommendResult apply(ChatBotSlotDTO slot) {
+        log.info("[ChatBot-Recommend] tool called. slot={}", slot);
+        validate(slot);
+        log.info("[ChatBot-Recommend] slot validated. locationKeyword={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}",
+            slot.locationKeyword(),
+            slot.radiusKm(),
+            slot.dealType(),
+            slot.dealAmountMax(),
+            slot.depositMax(),
+            slot.monthlyRentMax(),
+            slot.housingType(),
+            slot.priorities());
+
+        KakaoPlace place = kakaoApiService.searchFirstPlace(slot.locationKeyword());
+        log.info("[ChatBot-Recommend] kakao place resolved. keyword={}, placeName={}, latitude={}, longitude={}",
+            slot.locationKeyword(),
+            place.name(),
+            place.latitude(),
+            place.longitude());
+
+        NeighborhoodRecommendRequest request = new NeighborhoodRecommendRequest();
+        request.setLatitude(place.latitude());
+        request.setLongitude(place.longitude());
+        request.setRadiusKm(slot.radiusKm());
+        request.setDealType(slot.dealType());
+        applyBudget(request, slot);
+        request.setHousingType(slot.housingType());
+        request.setPriorities(slot.priorities().stream().map(SurveyCategory::name).toList());
+        log.info("[ChatBot-Recommend] converted request. latitude={}, longitude={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}",
+            request.getLatitude(),
+            request.getLongitude(),
+            request.getRadiusKm(),
+            request.getDealType(),
+            request.getDealAmountMax(),
+            request.getDepositMax(),
+            request.getMonthlyRentMax(),
+            request.getHousingType(),
+            request.getPriorities());
+
+        try {
+            NeighborhoodRecommendResponse response = neighborhoodRecommendService.recommend(request);
+            log.info("[ChatBot-Recommend] recommendation completed. totalCount={}, recommendationCount={}, priorities={}",
+                response.getTotalCount(),
+                response.getRecommendations() == null ? 0 : response.getRecommendations().size(),
+                response.getPriorities());
+            return new ChatBotRecommendResult(
+                slot.locationKeyword(),
+                place.latitude(),
+                place.longitude(),
+                slot.radiusKm(),
+                slot.dealType(),
+                slot.dealAmountMax(),
+                slot.depositMax(),
+                slot.monthlyRentMax(),
+                slot.housingType(),
+                response
+            );
+        } catch (Exception exception) {
+            log.error("Neighborhood recommendation failed. slot={}, latitude={}, longitude={}, priorities={}",
+                slot, place.latitude(), place.longitude(), request.getPriorities(), exception);
+            throw new IllegalStateException("동네 추천 실행 중 오류가 발생했습니다: " + rootMessage(exception), exception);
+        }
+    }
+
+    private void validate(ChatBotSlotDTO slot) {
+        if (slot == null) {
+            throw new IllegalArgumentException("추천 조건이 없습니다.");
+        }
+        if (isBlank(slot.locationKeyword())) {
+            throw new IllegalArgumentException("장소 키워드가 필요합니다.");
+        }
+        if (slot.radiusKm() == null || slot.radiusKm() <= 0) {
+            throw new IllegalArgumentException("반경은 0보다 커야 합니다.");
+        }
+        if (isBlank(slot.dealType())) {
+            throw new IllegalArgumentException("거래 유형이 필요합니다.");
+        }
+        validateBudget(slot);
+        if (isBlank(slot.housingType())) {
+            throw new IllegalArgumentException("주거 형태가 필요합니다.");
+        }
+        List<SurveyCategory> priorities = slot.priorities();
+        if (priorities == null || priorities.size() != 3 || priorities.stream().distinct().count() != 3) {
+            throw new IllegalArgumentException("우선순위는 중복 없이 정확히 3개가 필요합니다.");
+        }
+    }
+
+    private void validateBudget(ChatBotSlotDTO slot) {
+        String dealType = slot.dealType().trim();
+        if ("매매".equals(dealType)) {
+            validatePositive("매매가 최대", slot.dealAmountMax());
+            return;
+        }
+        if ("전세".equals(dealType)) {
+            validatePositive("보증금 최대", slot.depositMax());
+            return;
+        }
+        if ("월세".equals(dealType)) {
+            validatePositive("보증금 최대", slot.depositMax());
+            validatePositive("월세 최대", slot.monthlyRentMax());
+            return;
+        }
+        throw new IllegalArgumentException("거래 유형은 매매, 전세, 월세 중 하나여야 합니다.");
+    }
+
+    private void validatePositive(String label, Long value) {
+        if (value == null || value <= 0) {
+            throw new IllegalArgumentException(label + "은(는) 0보다 커야 합니다.");
+        }
+    }
+
+    private void applyBudget(NeighborhoodRecommendRequest request, ChatBotSlotDTO slot) {
+        String dealType = slot.dealType() == null ? "" : slot.dealType().trim();
+        if ("매매".equals(dealType)) {
+            request.setDealAmountMax(Math.toIntExact(slot.dealAmountMax()));
+            return;
+        }
+        if ("전세".equals(dealType)) {
+            request.setDepositMax(Math.toIntExact(slot.depositMax()));
+            return;
+        }
+        if ("월세".equals(dealType)) {
+            request.setDepositMax(Math.toIntExact(slot.depositMax()));
+            request.setMonthlyRentMax(Math.toIntExact(slot.monthlyRentMax()));
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return isBlank(message) ? current.getClass().getSimpleName() : message;
+    }
+}
