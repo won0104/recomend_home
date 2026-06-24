@@ -140,12 +140,12 @@ function handleMapSelect(aptSeq) {
 
 const lifestyleOptions = [
   { id: 'CAFE',     icon: '☕', title: '카페·외식' },
-  { id: 'CULTURE',  icon: '🏃', title: '운동·여가' },
+  { id: 'CULTURE',  icon: '🏃', title: '운동·취미' },
   { id: 'SHOPPING', icon: '🛒', title: '장보기·생활편의' },
   { id: 'SCHOOL',   icon: '🏫', title: '학교·교육' },
   { id: 'PARK',     icon: '🌳', title: '공원·산책' },
   { id: 'MEDICAL',  icon: '🏥', title: '의료' },
-  { id: 'PET',      icon: '🐾', title: '반려인' },
+  { id: 'PET',      icon: '🐾', title: '반려동물' },
 ]
 
 const categoryLabel = {

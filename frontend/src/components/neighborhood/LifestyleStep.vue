@@ -44,7 +44,7 @@ function lifestyleRank(id) {
     <aside class="lifestyle-side">
       <div class="lifestyle-guide">
         <h2>중요하다고 생각하는 조건을 <br> 순서대로 선택해주세요.</h2>
-        <p>선택한 순서가 우선순위가 되며, <br> 최대 3개까지 선택할 수 있어요.</p>
+        <p>선택한 순서가 우선순위가 되며, <br> <mark class="selection-limit">최대 3개</mark>까지 선택할 수 있어요.</p>
       </div>
 
       <div class="priority-box">
