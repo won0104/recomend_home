@@ -64,6 +64,8 @@
         FROM housedeals hd
         JOIN houseinfos hi ON hd.apt_seq = hi.apt_seq
         LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <!-- UNION ALL 이전에 매매 원본을 먼저 줄여, 불필요한 전국 행 조합을 피한다. -->
+        <include refid="preUnionDealFilters" />
 
         UNION ALL
 
@@ -99,6 +101,72 @@
         FROM houserents hr
         JOIN houseinfos hi ON hr.apt_seq = hi.apt_seq
         LEFT JOIN dongcodes dc ON dc.dong_code = CONCAT(hi.sgg_cd, hi.umd_cd)
+        <!-- UNION ALL 이전에 전월세 원본을 먼저 줄여, 불필요한 전국 행 조합을 피한다. -->
+        <include refid="preUnionRentFilters" />
+    </sql>
+
+    <!--
+        목록·통계 쿼리는 매매와 전월세를 UNION ALL로 합친다.
+        이 필터들은 합치기 전에 각 원본 테이블에 적용한다. 바깥 transactionFilters도 그대로 유지해
+        API의 기존 조건 의미를 보장하고, 여기서는 인덱스를 탈 수 있는 지역·연월·거래유형 조건을
+        최대한 먼저 적용해 작업량을 줄이는 역할만 맡긴다.
+    -->
+    <sql id="preUnionDealFilters">
+        <where>
+            <if test="housingType != null and housingType.trim() != '' and housingType.toLowerCase() != 'all' and housingType.toLowerCase() != 'apt'">
+                AND 1 = 0
+            </if>
+            <!-- 전월세 요청 또는 전세/월세 세부 요청에서는 매매 원본을 읽지 않는다. -->
+            <if test="contractType != null and contractType.trim() != '' and contractType.toLowerCase() == 'rent'">
+                AND 1 = 0
+            </if>
+            <if test="rentType != null and rentType.trim() != '' and (rentType.toLowerCase() == 'jeonse' or rentType.toLowerCase() == 'monthly')">
+                AND 1 = 0
+            </if>
+            <if test="dealYear != null">
+                AND hd.deal_year = #{dealYear}
+            </if>
+            <if test="dealMonth != null">
+                AND hd.deal_month = #{dealMonth}
+            </if>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND hi.sgg_cd = #{lawdCd}
+            </if>
+            <if test="dong != null and dong.trim() != ''">
+                AND hi.umd_nm LIKE CONCAT('%', #{dong}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <sql id="preUnionRentFilters">
+        <where>
+            <if test="housingType != null and housingType.trim() != '' and housingType.toLowerCase() != 'all' and housingType.toLowerCase() != 'apt'">
+                AND 1 = 0
+            </if>
+            <!-- 매매 요청에서는 전월세 원본을 읽지 않는다. -->
+            <if test="contractType != null and contractType.trim() != '' and contractType.toLowerCase() == 'deal'">
+                AND 1 = 0
+            </if>
+            <if test="dealYear != null">
+                AND hr.deal_year = #{dealYear}
+            </if>
+            <if test="dealMonth != null">
+                AND hr.deal_month = #{dealMonth}
+            </if>
+            <!-- 월세 0은 전세, 0 초과는 월세라는 houserents 저장 규칙을 사용한다. -->
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'jeonse'">
+                AND hr.monthly_rent = 0
+            </if>
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'monthly'">
+                AND hr.monthly_rent &gt; 0
+            </if>
+            <if test="lawdCd != null and lawdCd.trim() != ''">
+                AND hi.sgg_cd = #{lawdCd}
+            </if>
+            <if test="dong != null and dong.trim() != ''">
+                AND hi.umd_nm LIKE CONCAT('%', #{dong}, '%')
+            </if>
+        </where>
     </sql>
 
     <sql id="transactionFilters">
@@ -111,6 +179,15 @@
             </if>
             <if test="contractType != null and contractType.trim() != '' and contractType.toLowerCase() != 'all'">
                 AND LOWER(tx.contract_type) = LOWER(#{contractType})
+            </if>
+            <!-- rentType을 지정하면 전월세 행만 대상으로 하고, 월세 0원을 전세로 판별한다. -->
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'jeonse'">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent = 0
+            </if>
+            <if test="rentType != null and rentType.trim() != '' and rentType.toLowerCase() == 'monthly'">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent &gt; 0
             </if>
             <if test="housingType != null and housingType.trim() != '' and housingType.toLowerCase() != 'all' and housingType.toLowerCase() != 'apt'">
                 AND 1 = 0
@@ -125,6 +202,33 @@
                 AND (tx.name LIKE CONCAT('%', #{keyword}, '%')
                      OR tx.dong LIKE CONCAT('%', #{keyword}, '%')
                      OR tx.address LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <!-- 매매가 조건은 매매 행에만 적용한다. 전월세 보증금을 매매가와 섞지 않는다. -->
+            <if test="dealAmountMin != null">
+                AND tx.contract_type = 'deal'
+                AND tx.amount &gt;= #{dealAmountMin}
+            </if>
+            <if test="dealAmountMax != null">
+                AND tx.contract_type = 'deal'
+                AND tx.amount &lt;= #{dealAmountMax}
+            </if>
+            <!-- 보증금은 전세와 월세 모두에 적용한다. -->
+            <if test="depositMin != null">
+                AND tx.contract_type = 'rent'
+                AND tx.deposit &gt;= #{depositMin}
+            </if>
+            <if test="depositMax != null">
+                AND tx.contract_type = 'rent'
+                AND tx.deposit &lt;= #{depositMax}
+            </if>
+            <!-- 월세 조건은 월세 금액 자체를 필터링한다. 전세는 rentType=jeonse로 분리한다. -->
+            <if test="monthlyRentMin != null">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent &gt;= #{monthlyRentMin}
+            </if>
+            <if test="monthlyRentMax != null">
+                AND tx.contract_type = 'rent'
+                AND tx.monthly_rent &lt;= #{monthlyRentMax}
             </if>
         </where>
     </sql>

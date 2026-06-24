@@ -13,16 +13,19 @@ const props = defineProps({
 const search = ref({
   housingType: 'all',
   contractType: 'all',
+  rentType: 'all',
   dealYmd: '',
   lawdCode: '',
   sido: '',
   sigungu: '',
   emd: '',
   keyword: '',
-  priceMin: '',
-  priceMax: '',
-  areaMin: '',
-  areaMax: '',
+  dealAmountMin: '',
+  dealAmountMax: '',
+  depositMin: '',
+  depositMax: '',
+  monthlyRentMin: '',
+  monthlyRentMax: '',
   sortBy: 'latest'
 })
 const results = ref([])
@@ -53,6 +56,17 @@ function transactionAmountText(item) {
   return monthlyRent > 0 ? `보증금 ${deposit} / 월세 ${number(monthlyRent)}` : `전세 ${deposit}`
 }
 
+function onContractTypeChange() {
+  // 매매와 전월세의 금액 의미가 다르므로, 거래 유형을 바꾸면 이전 범위 조건을 비운다.
+  search.value.rentType = 'all'
+  search.value.dealAmountMin = ''
+  search.value.dealAmountMax = ''
+  search.value.depositMin = ''
+  search.value.depositMax = ''
+  search.value.monthlyRentMin = ''
+  search.value.monthlyRentMax = ''
+}
+
 async function runSearch() {
   loading.value = true
   statusMessage.value = ''
@@ -61,8 +75,15 @@ async function runSearch() {
     dealYmd: search.value.dealYmd || undefined,
     housingType: search.value.housingType,
     contractType: search.value.contractType,
+    rentType: search.value.contractType === 'rent' ? search.value.rentType : undefined,
     dong: selectedDongName(),
-    keyword: search.value.keyword || undefined
+    keyword: search.value.keyword || undefined,
+    dealAmountMin: search.value.contractType === 'deal' ? search.value.dealAmountMin || undefined : undefined,
+    dealAmountMax: search.value.contractType === 'deal' ? search.value.dealAmountMax || undefined : undefined,
+    depositMin: search.value.contractType === 'rent' ? search.value.depositMin || undefined : undefined,
+    depositMax: search.value.contractType === 'rent' ? search.value.depositMax || undefined : undefined,
+    monthlyRentMin: search.value.contractType === 'rent' && search.value.rentType !== 'jeonse' ? search.value.monthlyRentMin || undefined : undefined,
+    monthlyRentMax: search.value.contractType === 'rent' && search.value.rentType !== 'jeonse' ? search.value.monthlyRentMax || undefined : undefined
   }
   try {
     const [response, summaryResponse] = await Promise.all([
@@ -79,7 +100,9 @@ async function runSearch() {
   }
 }
 
-// 첫 화면의 카드에는 전체 거래 통계만 표시한다. 상세 목록과 지도는 사용자가 검색할 때만 불러온다.
+// 상단 카드만 단독으로 갱신해야 하는 화면에서 사용하는 보조 함수다.
+// 현재 홈 화면은 최초 진입 때 runSearch()를 호출하므로, 일반적인 첫 화면 흐름에서는
+// 목록·지도·상단 통계를 한 번에 갱신한다.
 async function loadInitialSummary() {
   try {
     const response = await api.get('/properties/summary')
@@ -140,16 +163,19 @@ function resetFilters() {
   search.value = {
     housingType: 'all',
     contractType: 'all',
+    rentType: 'all',
     dealYmd: '',
     lawdCode: '',
     sido: '',
     sigungu: '',
     emd: '',
     keyword: '',
-    priceMin: '',
-    priceMax: '',
-    areaMin: '',
-    areaMax: '',
+    dealAmountMin: '',
+    dealAmountMax: '',
+    depositMin: '',
+    depositMax: '',
+    monthlyRentMin: '',
+    monthlyRentMax: '',
     sortBy: 'latest'
   }
   results.value = []
@@ -157,7 +183,15 @@ function resetFilters() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSidoOptions(), loadFavorites(), loadInitialSummary()])
+  // 1. 기본 지역(서울특별시 → 종로구)을 먼저 정한다.
+  //    loadSidoOptions() 내부에서 기본 법정동 코드도 설정하므로, 이를 기다리지 않고
+  //    검색하면 지역 코드가 비어 있는 전체 검색이 실행될 수 있다.
+  await loadSidoOptions()
+
+  // 2. 지역 기본값이 준비된 뒤 관심지역과 실제 거래 검색을 동시에 시작한다.
+  //    runSearch()는 /properties/search(목록·지도)와 /properties/summary(상단 카드)를
+  //    함께 호출하므로, 새로고침 직후에도 종로구의 매매·전월세 데이터가 화면에 표시된다.
+  await Promise.all([loadFavorites(), runSearch()])
 })
 </script>
 
@@ -202,10 +236,18 @@ onMounted(async () => {
               </div>
               <div class="span-6">
                 <label class="form-label small">거래 유형</label>
-                <select v-model="search.contractType" class="form-select form-select-sm">
+                <select v-model="search.contractType" class="form-select form-select-sm" @change="onContractTypeChange">
                   <option value="all">전체</option>
                   <option value="deal">매매</option>
                   <option value="rent">전월세</option>
+                </select>
+              </div>
+              <div v-if="search.contractType === 'rent'" class="span-6">
+                <label class="form-label small">전월세 유형</label>
+                <select v-model="search.rentType" class="form-select form-select-sm">
+                  <option value="all">전세·월세 전체</option>
+                  <option value="jeonse">전세</option>
+                  <option value="monthly">월세</option>
                 </select>
               </div>
               <div class="span-6">
@@ -275,7 +317,10 @@ onMounted(async () => {
         <div class="card">
           <div class="card-header section-head">
             <div class="title"><span class="bar"></span><span>검색 결과</span>
-              <span class="badge text-bg-primary">{{ results.length }}건</span>
+              <!--
+                results는 화면 렌더링 보호를 위해 API가 최대 1,000건만 내려준다.
+              -->
+              <span class="badge text-bg-primary">{{ number(stats.totalCount) }}건</span>
             </div>
           </div>
           <div class="filter-rail">
@@ -289,10 +334,18 @@ onMounted(async () => {
                 </select>
               </div>
               <div class="span-6"><label class="form-label small">아파트명/법정동</label><input v-model="search.keyword" class="form-control form-control-sm" placeholder="예: 광화문풍림" /></div>
-              <div class="span-3"><label class="form-label small">최소 금액 (만원)</label><input v-model="search.priceMin" type="number" min="0" class="form-control form-control-sm" /></div>
-              <div class="span-3"><label class="form-label small">최대 금액 (만원)</label><input v-model="search.priceMax" type="number" min="0" class="form-control form-control-sm" /></div>
-              <div class="span-3"><label class="form-label small">최소 면적 (㎡)</label><input v-model="search.areaMin" type="number" min="0" step="0.1" class="form-control form-control-sm" /></div>
-              <div class="span-3"><label class="form-label small">최대 면적 (㎡)</label><input v-model="search.areaMax" type="number" min="0" step="0.1" class="form-control form-control-sm" /></div>
+              <template v-if="search.contractType === 'deal'">
+                <div class="span-3"><label class="form-label small">최소 매매가 (만원)</label><input v-model="search.dealAmountMin" type="number" min="0" class="form-control form-control-sm" /></div>
+                <div class="span-3"><label class="form-label small">최대 매매가 (만원)</label><input v-model="search.dealAmountMax" type="number" min="0" class="form-control form-control-sm" /></div>
+              </template>
+              <template v-else-if="search.contractType === 'rent'">
+                <div class="span-3"><label class="form-label small">최소 보증금 (만원)</label><input v-model="search.depositMin" type="number" min="0" class="form-control form-control-sm" /></div>
+                <div class="span-3"><label class="form-label small">최대 보증금 (만원)</label><input v-model="search.depositMax" type="number" min="0" class="form-control form-control-sm" /></div>
+                <template v-if="search.rentType !== 'jeonse'">
+                  <div class="span-3"><label class="form-label small">최소 월세 (만원)</label><input v-model="search.monthlyRentMin" type="number" min="0" class="form-control form-control-sm" /></div>
+                  <div class="span-3"><label class="form-label small">최대 월세 (만원)</label><input v-model="search.monthlyRentMax" type="number" min="0" class="form-control form-control-sm" /></div>
+                </template>
+              </template>
             </div>
           </div>
           <div class="table-responsive result-table">
@@ -308,7 +361,16 @@ onMounted(async () => {
                   <td>{{ item.aptNm || item.houseName || item.name }}</td>
                   <td>{{ item.dong || item.umdNm }}</td>
                   <td class="text-end mono">{{ item.area }}</td>
-                  <td class="text-end"><span class="money">{{ transactionAmountText(item) }}</span></td>
+                  <!--
+                    매매 금액은 숫자만 있어 고정폭 숫자 폰트가 잘 맞는다.
+                    전월세 금액은 "보증금 / 월세"처럼 한글이 함께 들어가므로,
+                    한글 글리프가 없는 고정폭 폰트의 대체 렌더링을 피하기 위해 별도 스타일을 적용한다.
+                  -->
+                  <td class="text-end">
+                    <span class="money" :class="{ 'money--rent': item.contractType === 'rent' }">
+                      {{ transactionAmountText(item) }}
+                    </span>
+                  </td>
                   <td class="text-end mono">{{ item.floor }}</td>
                 </tr>
               </tbody>

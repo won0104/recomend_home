@@ -23,7 +23,7 @@ public class NeighborhoodRecommendApiController {
     private final NeighborhoodRecommendService neighborhoodRecommendService;
 
     @PostMapping("/recommend")
-    @Operation(summary = "맞춤 동네 추천 조건 필터링", description = "기준 위치 반경과 예산 범위로 홈매매 후보를 필터링하고 법정동 후보를 반환합니다.")
+    @Operation(summary = "맞춤 동네 추천 조건 필터링", description = "기준 위치 반경과 거래 유형별 최대 예산으로 후보 법정동을 필터링합니다. 매매는 dealAmountMax, 전세·월세는 depositMax, 월세는 monthlyRentMax를 만원 단위로 사용합니다.")
     public ResponseEntity<?> recommend(@RequestBody NeighborhoodRecommendRequest request) throws Exception {
         return ResponseEntity.ok(ApiResponse.ok("동네 추천 후보입니다.",
                 neighborhoodRecommendService.recommend(request)));

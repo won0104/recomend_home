@@ -86,6 +86,8 @@
             deal_amount VARCHAR(10) NULL COMMENT '거래가격',
             PRIMARY KEY (no),
             INDEX idx_housedeals_apt_seq (apt_seq),
+            <!-- 홈 검색은 지역으로 houseinfos를 먼저 좁힌 뒤 거래 연월을 확인하므로 복합 인덱스를 둔다. -->
+            INDEX idx_housedeals_apt_date (apt_seq, deal_year, deal_month),
             CONSTRAINT fk_housedeals_houseinfos
                 FOREIGN KEY (apt_seq) REFERENCES houseinfos (apt_seq)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4

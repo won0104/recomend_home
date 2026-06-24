@@ -22,6 +22,9 @@
         <result column="gugun_name" property="gugunName" />
         <result column="deal_count" property="dealCount" />
         <result column="avg_price" property="avgPrice" />
+        <result column="rent_count" property="rentCount" />
+        <result column="avg_deposit" property="avgDeposit" />
+        <result column="avg_monthly_rent" property="avgMonthlyRent" />
     </resultMap>
 
     <resultMap id="recentDealMap" type="RealEstateTransaction">
@@ -35,6 +38,8 @@
         <result column="lot" property="lot" />
         <result column="region_code" property="regionCode" />
         <result column="amount" property="amount" />
+        <result column="deposit" property="deposit" />
+        <result column="monthly_rent" property="monthlyRent" />
         <result column="area" property="area" />
         <result column="floor" property="floor" />
         <result column="date" property="date" />
@@ -57,18 +62,72 @@
         hi.longitude,
         dc.sido_name,
         dc.gugun_name,
-        <!-- 상세 목록의 거래 수·평균 가격도 추천에 사용한 예산 조건을 동일하게 적용한다. -->
+        <!-- 상세 목록의 거래 수·평균 매매가도 추천에 사용한 매매가 범위를 동일하게 적용한다. -->
         (SELECT COUNT(*) FROM housedeals hd WHERE hd.apt_seq = hi.apt_seq
-            <if test="maxPrice != null">
-                AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
+            <if test="dealAmountMin != null">
+                AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{dealAmountMin}
+            </if>
+            <if test="dealAmountMax != null">
+                AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{dealAmountMax}
             </if>
         ) AS deal_count,
         (SELECT CAST(AVG(CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED)) AS SIGNED)
          FROM housedeals hd2 WHERE hd2.apt_seq = hi.apt_seq
-            <if test="maxPrice != null">
-                AND CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
+            <if test="dealAmountMin != null">
+                AND CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{dealAmountMin}
             </if>
-        ) AS avg_price
+            <if test="dealAmountMax != null">
+                AND CAST(REPLACE(COALESCE(hd2.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{dealAmountMax}
+            </if>
+        ) AS avg_price,
+        <!--
+            전세·월세 목록의 "조건 일치" 문구를 실제 평균 거래 조건으로 바꾸기 위한 집계다.
+            현재 선택한 거래 유형과 동일한 전월세만 집계하며, 화면이 보낸 최대 보증금·월세 조건도
+            EXISTS 필터와 똑같이 적용해 목록에 보이는 기준과 평균 기준이 어긋나지 않게 한다.
+        -->
+        <choose>
+            <when test="dealType != null and dealType == '전세'">
+                (SELECT COUNT(*) FROM houserents hr WHERE hr.apt_seq = hi.apt_seq
+                    AND hr.monthly_rent = 0
+                    <if test="depositMin != null">AND hr.deposit &gt;= #{depositMin}</if>
+                    <if test="depositMax != null">AND hr.deposit &lt;= #{depositMax}</if>
+                ) AS rent_count,
+                (SELECT CAST(AVG(hr.deposit) AS SIGNED) FROM houserents hr WHERE hr.apt_seq = hi.apt_seq
+                    AND hr.monthly_rent = 0
+                    <if test="depositMin != null">AND hr.deposit &gt;= #{depositMin}</if>
+                    <if test="depositMax != null">AND hr.deposit &lt;= #{depositMax}</if>
+                ) AS avg_deposit,
+                0 AS avg_monthly_rent
+            </when>
+            <when test="dealType != null and dealType == '월세'">
+                (SELECT COUNT(*) FROM houserents hr WHERE hr.apt_seq = hi.apt_seq
+                    AND hr.monthly_rent &gt; 0
+                    <if test="depositMin != null">AND hr.deposit &gt;= #{depositMin}</if>
+                    <if test="depositMax != null">AND hr.deposit &lt;= #{depositMax}</if>
+                    <if test="monthlyRentMin != null">AND hr.monthly_rent &gt;= #{monthlyRentMin}</if>
+                    <if test="monthlyRentMax != null">AND hr.monthly_rent &lt;= #{monthlyRentMax}</if>
+                ) AS rent_count,
+                (SELECT CAST(AVG(hr.deposit) AS SIGNED) FROM houserents hr WHERE hr.apt_seq = hi.apt_seq
+                    AND hr.monthly_rent &gt; 0
+                    <if test="depositMin != null">AND hr.deposit &gt;= #{depositMin}</if>
+                    <if test="depositMax != null">AND hr.deposit &lt;= #{depositMax}</if>
+                    <if test="monthlyRentMin != null">AND hr.monthly_rent &gt;= #{monthlyRentMin}</if>
+                    <if test="monthlyRentMax != null">AND hr.monthly_rent &lt;= #{monthlyRentMax}</if>
+                ) AS avg_deposit,
+                (SELECT CAST(AVG(hr.monthly_rent) AS SIGNED) FROM houserents hr WHERE hr.apt_seq = hi.apt_seq
+                    AND hr.monthly_rent &gt; 0
+                    <if test="depositMin != null">AND hr.deposit &gt;= #{depositMin}</if>
+                    <if test="depositMax != null">AND hr.deposit &lt;= #{depositMax}</if>
+                    <if test="monthlyRentMin != null">AND hr.monthly_rent &gt;= #{monthlyRentMin}</if>
+                    <if test="monthlyRentMax != null">AND hr.monthly_rent &lt;= #{monthlyRentMax}</if>
+                ) AS avg_monthly_rent
+            </when>
+            <otherwise>
+                0 AS rent_count,
+                NULL AS avg_deposit,
+                NULL AS avg_monthly_rent
+            </otherwise>
+        </choose>
     </sql>
 
     <select id="search" resultMap="houseInfoMap">
@@ -94,15 +153,60 @@
             <if test="keyword != null and keyword.trim() != ''">
                 AND hi.apt_nm LIKE CONCAT('%', #{keyword}, '%')
             </if>
-            <!-- 예산이 있을 때는 예산 이하 거래가 적어도 한 건 존재하는 아파트만 표시한다. -->
-            <if test="maxPrice != null">
-                AND EXISTS (
-                    SELECT 1
-                    FROM housedeals affordable_hd
-                    WHERE affordable_hd.apt_seq = hi.apt_seq
-                      AND CAST(REPLACE(COALESCE(affordable_hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{maxPrice}
-                )
-            </if>
+            <!--
+                상세 목록도 동네 추천 후보 SQL과 같은 거래 유형을 사용한다.
+                전세는 월세 0원, 월세는 월세 0원 초과로 판별하며, 금액 범위 안 거래가 한 건이라도
+                있는 아파트만 지도·목록에 보인다.
+            -->
+            <choose>
+                <when test="dealType != null and dealType == '전세'">
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houserents hr
+                        WHERE hr.apt_seq = hi.apt_seq
+                          AND hr.monthly_rent = 0
+                        <if test="depositMin != null">
+                            AND hr.deposit &gt;= #{depositMin}
+                        </if>
+                        <if test="depositMax != null">
+                            AND hr.deposit &lt;= #{depositMax}
+                        </if>
+                    )
+                </when>
+                <when test="dealType != null and dealType == '월세'">
+                    AND EXISTS (
+                        SELECT 1
+                        FROM houserents hr
+                        WHERE hr.apt_seq = hi.apt_seq
+                          AND hr.monthly_rent &gt; 0
+                        <if test="depositMin != null">
+                            AND hr.deposit &gt;= #{depositMin}
+                        </if>
+                        <if test="depositMax != null">
+                            AND hr.deposit &lt;= #{depositMax}
+                        </if>
+                        <if test="monthlyRentMin != null">
+                            AND hr.monthly_rent &gt;= #{monthlyRentMin}
+                        </if>
+                        <if test="monthlyRentMax != null">
+                            AND hr.monthly_rent &lt;= #{monthlyRentMax}
+                        </if>
+                    )
+                </when>
+                <otherwise>
+                    AND EXISTS (
+                        SELECT 1
+                        FROM housedeals hd
+                        WHERE hd.apt_seq = hi.apt_seq
+                        <if test="dealAmountMin != null">
+                            AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &gt;= #{dealAmountMin}
+                        </if>
+                        <if test="dealAmountMax != null">
+                            AND CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) &lt;= #{dealAmountMax}
+                        </if>
+                    )
+                </otherwise>
+            </choose>
         </where>
         ORDER BY hi.apt_nm ASC
         LIMIT 200
@@ -126,6 +230,51 @@
     </update>
 
     <select id="findRecentDealsByAptSeq" resultMap="recentDealMap">
+        <!--
+            상세 페이지가 전달한 dealType으로 원본 테이블을 선택한다.
+            전세와 월세는 모두 houserents에 저장되며, monthly_rent가 0이면 전세, 0 초과면 월세다.
+            매매를 선택하거나 파라미터가 없으면 기존 housedeals 조회를 유지한다.
+        -->
+        <choose>
+            <when test="dealType == '전세' or dealType == '월세'">
+                SELECT
+                    CONCAT('rent-', hr.rent_id) AS id,
+                    hr.apt_seq,
+                    'apt' AS housing_type,
+                    'rent' AS contract_type,
+                    COALESCE(hi.apt_nm, '') AS name,
+                    COALESCE(hi.umd_nm, '') AS dong,
+                    COALESCE(hi.umd_nm, '') AS emd,
+                    COALESCE(hi.jibun, '') AS lot,
+                    COALESCE(hi.sgg_cd, '') AS region_code,
+                    hr.deposit AS amount,
+                    hr.deposit,
+                    hr.monthly_rent,
+                    hr.exclu_use_ar AS area,
+                    CAST(REPLACE(COALESCE(hr.floor, '0'), ',', '') AS SIGNED) AS floor,
+                    CASE
+                        WHEN hr.deal_year &gt; 0 AND hr.deal_month &gt; 0 AND hr.deal_day &gt; 0
+                            THEN DATE_FORMAT(STR_TO_DATE(CONCAT(hr.deal_year, LPAD(hr.deal_month, 2, '0'), LPAD(hr.deal_day, 2, '0')), '%Y%m%d'), '%Y-%m-%d')
+                        ELSE ''
+                    END AS date,
+                    CASE
+                        WHEN hr.deal_year &gt; 0 AND hr.deal_month &gt; 0
+                            THEN CONCAT(hr.deal_year, LPAD(hr.deal_month, 2, '0'))
+                        ELSE ''
+                    END AS deal_ymd
+                FROM houserents hr
+                JOIN houseinfos hi ON hr.apt_seq = hi.apt_seq
+                WHERE hr.apt_seq = #{aptSeq}
+                <if test="dealType == '전세'">
+                    AND hr.monthly_rent = 0
+                </if>
+                <if test="dealType == '월세'">
+                    AND hr.monthly_rent &gt; 0
+                </if>
+                ORDER BY hr.deal_year DESC, hr.deal_month DESC, hr.deal_day DESC, hr.rent_id DESC
+                LIMIT #{limit}
+            </when>
+            <otherwise>
         SELECT
             CAST(hd.no AS CHAR) AS id,
             hd.apt_seq,
@@ -137,6 +286,8 @@
             COALESCE(hi.jibun, '') AS lot,
             COALESCE(hi.sgg_cd, '') AS region_code,
             CAST(REPLACE(COALESCE(hd.deal_amount, '0'), ',', '') AS UNSIGNED) AS amount,
+            0 AS deposit,
+            0 AS monthly_rent,
             hd.exclu_use_ar AS area,
             CAST(REPLACE(COALESCE(hd.floor, '0'), ',', '') AS SIGNED) AS floor,
             CASE
@@ -154,5 +305,7 @@
         WHERE hd.apt_seq = #{aptSeq}
         ORDER BY hd.deal_year DESC, hd.deal_month DESC, hd.deal_day DESC, hd.no DESC
         LIMIT #{limit}
+            </otherwise>
+        </choose>
     </select>
 </mapper>

@@ -5,8 +5,9 @@ const props = defineProps({
 
 const steps = [
   { no: 1, label: '위치 설정' },
-  { no: 2, label: '예산 설정' },
-  { no: 3, label: '생활 설정' }
+  { no: 2, label: '거래·주거' },
+  { no: 3, label: '예산 설정' },
+  { no: 4, label: '생활 설정' }
 ]
 
 function stepText(stepNo) {

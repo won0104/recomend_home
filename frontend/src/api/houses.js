@@ -10,8 +10,8 @@ export async function fetchHouse(aptSeq) {
   return data
 }
 
-export async function fetchHouseDeals(aptSeq, limit = 20) {
-  const { data } = await api.get(`/houses/${encodeURIComponent(aptSeq)}/deals`, { params: { limit } })
+export async function fetchHouseDeals(aptSeq, dealType = '매매', limit = 20) {
+  const { data } = await api.get(`/houses/${encodeURIComponent(aptSeq)}/deals`, { params: { dealType, limit } })
   return data
 }
 
