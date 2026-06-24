@@ -516,21 +516,25 @@ onMounted(() => {
                 </div>
                 <span class="nr-card__detail-hint">클릭해서 매물 보기 →</span>
               </div>
-              <div class="nr-card__score-circle" :class="`nr-card__score-circle--rank${rec.rank}`">
-                <span class="nr-card__score-num">{{ rec.score.toFixed(0) }}</span>
-                <span class="nr-card__score-unit">점</span>
-              </div>
             </li>
           </ul>
 
-          <p v-if="totalCandidateCount > 0" class="nr-candidate-note">
-            총 <strong>{{ totalCandidateCount }}</strong>개 동네를 분석하여 최적 <strong>{{ recommendations.length }}</strong>곳을 선정했습니다.
-          </p>
+          <!-- 추천 점수의 해석 기준은 카드 목록을 읽은 직후 확인할 수 있게 카드 아래에 둔다. -->
           <p class="nr-disclaimer">추천 점수는 공개된 공공데이터를 기반으로 분석되며, 실제 생활 환경과 다를 수 있습니다.</p>
           <button class="nr-retry-btn" @click="backToLifestyleStep">다시 설정하기</button>
         </section>
 
         <aside class="nr-result-right">
+          <!-- 지도와 관련된 분석 안내는 지도 바로 위에 배치해, 카드 목록과 시각적으로 분리한다. -->
+          <div class="nr-map-summary">
+            <p v-if="totalCandidateCount > 0" class="nr-candidate-note">
+              <svg class="nr-candidate-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z" />
+                <circle cx="12" cy="9" r="2.5" />
+              </svg>
+              총 <strong>{{ totalCandidateCount }}</strong>개 동네를 분석하여 최적 <strong>{{ recommendations.length }}</strong>곳을 선정했습니다.
+            </p>
+          </div>
           <NeighborhoodResultMap :base-location="baseLocation" :neighborhoods="recommendations" class="nr-result-map" />
         </aside>
       </div>
@@ -552,13 +556,6 @@ onMounted(() => {
             <span class="nr-detail-district">
               {{ [selectedNeighborhood.sidoName, selectedNeighborhood.sigunguName].filter(Boolean).join(' ') }}
             </span>
-          </div>
-          <div
-            class="nr-detail-total-score"
-            :style="{ color: RANK_COLORS[selectedNeighborhood.rank], borderColor: RANK_COLORS[selectedNeighborhood.rank] }"
-          >
-            <span class="nr-detail-total-score__num">{{ selectedNeighborhood.score.toFixed(0) }}</span>
-            <span class="nr-detail-total-score__unit">점</span>
           </div>
         </div>
 

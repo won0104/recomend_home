@@ -1974,7 +1974,8 @@ dl.row dd {
 /* ── 동네 추천 결과 화면 (nr-*) ────────────────────────── */
 .nr-result-page {
   display: grid;
-  grid-template-columns: 1fr 400px;
+  /* 카드 영역은 조금 압축하고, 결과 위치를 보는 지도 영역을 더 넓게 확보한다. */
+  grid-template-columns: minmax(0, 1fr) minmax(460px, .72fr);
   gap: 28px;
   max-width: 1280px;
   margin: 0 auto;
@@ -2109,9 +2110,10 @@ dl.row dd {
   border: 0;
   background: transparent;
   color: #64748b;
-  font-size: 22px;
+  font-size: 21px;
   line-height: 1;
-  font-weight: 700;
+  /* 윤곽 별표가 두껍게 보이지 않도록 보통 굵기로 표시한다. */
+  font-weight: 400;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -2119,8 +2121,10 @@ dl.row dd {
   color: #079455;
 }
 .nr-card__favorite--active {
-  color: #079455;
+  /* 저장된 관심지역은 별표만 노란색으로 바꿔 상태를 분명히 보여 준다. */
+  color: #f59e0b;
 }
+.nr-card__favorite--active:hover:not(:disabled) { color: #f59e0b; }
 .nr-card__favorite:disabled {
   cursor: wait;
   opacity: .6;
@@ -2166,33 +2170,6 @@ dl.row dd {
   border: 1px solid #fed7aa;
 }
 
-/* 점수 원형 */
-.nr-card__score-circle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 88px;
-  flex-shrink: 0;
-  margin: 14px 16px 14px 0;
-  border-radius: 50%;
-  border: 3px solid currentColor;
-  aspect-ratio: 1;
-}
-.nr-card__score-circle--rank1 { color: #2563EB; }
-.nr-card__score-circle--rank2 { color: #22C55E; }
-.nr-card__score-circle--rank3 { color: #F97316; }
-.nr-card__score-num {
-  font-size: 26px;
-  font-weight: 900;
-  line-height: 1;
-}
-.nr-card__score-unit {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: .8;
-}
-
 /* 면책 문구 */
 .nr-disclaimer {
   font-size: 12px;
@@ -2224,7 +2201,33 @@ dl.row dd {
 .nr-result-right {
   position: sticky;
   top: 70px;
-  height: calc(100vh - 100px);
+  /* 결과 제목·조건 영역 아래, 1위 추천 카드의 시작선에 지도를 맞춘다. */
+  margin-top: 140px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+.nr-map-summary {
+  margin: 0 0 12px;
+}
+.nr-map-summary .nr-candidate-note {
+  margin: 0 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nr-candidate-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  fill: #ecfdf3;
+  stroke: #079455;
+  stroke-width: 1.8;
+}
+.nr-result-right .nr-result-map {
+  /* 실제 지도 박스만 추천 카드 3장 영역과 같은 높이로 맞춘다. */
+  flex: 0 0 440px;
+  height: 440px;
 }
 .nr-result-map {
   height: 100%;
@@ -2255,10 +2258,11 @@ dl.row dd {
   .nr-result-right {
     position: static;
     order: -1;
+    margin-top: 0;
+    height: auto;
+    display: block;
   }
   .nr-map-wrap { height: 280px; }
-  .nr-card__score-circle { width: 72px; }
-  .nr-card__score-num { font-size: 20px; }
 }
 
 /* ── 동네 상세 화면 (nr-detail-*) ────────────────────── */
@@ -2277,7 +2281,7 @@ dl.row dd {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 45px;
   flex-wrap: wrap;
 }
 .nr-back-btn {
@@ -2316,20 +2320,6 @@ dl.row dd {
   font-size: 14px;
   color: var(--text-secondary, #777);
 }
-.nr-detail-total-score {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 76px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  border: 3px solid currentColor;
-  flex-shrink: 0;
-}
-.nr-detail-total-score__num { font-size: 24px; font-weight: 900; line-height: 1; }
-.nr-detail-total-score__unit { font-size: 12px; font-weight: 600; }
-
 /* 2단 본문 */
 .nr-detail-body {
   display: grid;
