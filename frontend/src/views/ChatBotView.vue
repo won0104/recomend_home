@@ -2,6 +2,8 @@
 import { nextTick, ref } from 'vue'
 import { sendChatMessage } from '../api/chat'
 
+const CHAT_SESSION_KEY = 'ssafy-home-chat-session-id'
+
 const input = ref('')
 const loading = ref(false)
 const messages = ref([
@@ -11,6 +13,18 @@ const messages = ref([
   }
 ])
 const listRef = ref(null)
+const sessionId = getOrCreateSessionId()
+
+function getOrCreateSessionId() {
+  const existing = localStorage.getItem(CHAT_SESSION_KEY)
+  if (existing) return existing
+
+  const generated = crypto?.randomUUID
+    ? crypto.randomUUID()
+    : `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  localStorage.setItem(CHAT_SESSION_KEY, generated)
+  return generated
+}
 
 async function submit() {
   const text = input.value.trim()
@@ -23,7 +37,7 @@ async function submit() {
 
   try {
     const history = messages.value.slice(0, -1).map(({ role, content }) => ({ role, content }))
-    const response = await sendChatMessage({ message: text, history })
+    const response = await sendChatMessage({ message: text, history, sessionId })
     messages.value.push({
       role: 'bot',
       content: response?.data?.message || '앗, 답변을 가져오지 못했어요. 잠시 후 다시 시도해 주세요 🙏'
