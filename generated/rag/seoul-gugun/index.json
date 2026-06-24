@@ -1,0 +1,152 @@
+[
+  {
+    "gugun_name": "강남구",
+    "file": "강남구.md",
+    "legal_dong_count": 14,
+    "population_available": false
+  },
+  {
+    "gugun_name": "강동구",
+    "file": "강동구.md",
+    "legal_dong_count": 9,
+    "population_available": false
+  },
+  {
+    "gugun_name": "강북구",
+    "file": "강북구.md",
+    "legal_dong_count": 4,
+    "population_available": true
+  },
+  {
+    "gugun_name": "강서구",
+    "file": "강서구.md",
+    "legal_dong_count": 13,
+    "population_available": true
+  },
+  {
+    "gugun_name": "관악구",
+    "file": "관악구.md",
+    "legal_dong_count": 3,
+    "population_available": false
+  },
+  {
+    "gugun_name": "광진구",
+    "file": "광진구.md",
+    "legal_dong_count": 7,
+    "population_available": true
+  },
+  {
+    "gugun_name": "구로구",
+    "file": "구로구.md",
+    "legal_dong_count": 10,
+    "population_available": false
+  },
+  {
+    "gugun_name": "금천구",
+    "file": "금천구.md",
+    "legal_dong_count": 3,
+    "population_available": false
+  },
+  {
+    "gugun_name": "노원구",
+    "file": "노원구.md",
+    "legal_dong_count": 5,
+    "population_available": true
+  },
+  {
+    "gugun_name": "도봉구",
+    "file": "도봉구.md",
+    "legal_dong_count": 4,
+    "population_available": true
+  },
+  {
+    "gugun_name": "동대문구",
+    "file": "동대문구.md",
+    "legal_dong_count": 10,
+    "population_available": true
+  },
+  {
+    "gugun_name": "동작구",
+    "file": "동작구.md",
+    "legal_dong_count": 9,
+    "population_available": false
+  },
+  {
+    "gugun_name": "마포구",
+    "file": "마포구.md",
+    "legal_dong_count": 26,
+    "population_available": true
+  },
+  {
+    "gugun_name": "서대문구",
+    "file": "서대문구.md",
+    "legal_dong_count": 20,
+    "population_available": true
+  },
+  {
+    "gugun_name": "서초구",
+    "file": "서초구.md",
+    "legal_dong_count": 10,
+    "population_available": false
+  },
+  {
+    "gugun_name": "성동구",
+    "file": "성동구.md",
+    "legal_dong_count": 17,
+    "population_available": true
+  },
+  {
+    "gugun_name": "성북구",
+    "file": "성북구.md",
+    "legal_dong_count": 39,
+    "population_available": true
+  },
+  {
+    "gugun_name": "송파구",
+    "file": "송파구.md",
+    "legal_dong_count": 13,
+    "population_available": false
+  },
+  {
+    "gugun_name": "양천구",
+    "file": "양천구.md",
+    "legal_dong_count": 3,
+    "population_available": false
+  },
+  {
+    "gugun_name": "영등포구",
+    "file": "영등포구.md",
+    "legal_dong_count": 34,
+    "population_available": false
+  },
+  {
+    "gugun_name": "용산구",
+    "file": "용산구.md",
+    "legal_dong_count": 36,
+    "population_available": true
+  },
+  {
+    "gugun_name": "은평구",
+    "file": "은평구.md",
+    "legal_dong_count": 11,
+    "population_available": true
+  },
+  {
+    "gugun_name": "종로구",
+    "file": "종로구.md",
+    "legal_dong_count": 87,
+    "population_available": true
+  },
+  {
+    "gugun_name": "중구",
+    "file": "중구.md",
+    "legal_dong_count": 74,
+    "population_available": true
+  },
+  {
+    "gugun_name": "중랑구",
+    "file": "중랑구.md",
+    "legal_dong_count": 6,
+    "population_available": true
+  }
+]
