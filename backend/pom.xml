@@ -22,7 +22,7 @@
         <lombok.version>1.18.44</lombok.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <spring-ai.version>1.1.2</spring-ai.version>
     </properties>
 
     <dependencyManagement>
@@ -46,6 +46,11 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-redis</artifactId>
         </dependency>
 
         <dependency>
