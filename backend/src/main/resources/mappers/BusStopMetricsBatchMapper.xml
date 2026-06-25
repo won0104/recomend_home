@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.batch.bus.BusStopMetricsBatchDao">
+
+    <update id="createMetricTable">
+        CREATE TABLE IF NOT EXISTS dong_bus_stop_metrics (
+            dong_code VARCHAR(10) NOT NULL,
+            bus_stop_count INT NOT NULL DEFAULT 0,
+            source_date DATE NOT NULL,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (dong_code),
+            CONSTRAINT fk_bus_stop_metrics_dong
+                FOREIGN KEY (dong_code) REFERENCES dongcodes (dong_code)
+                ON UPDATE CASCADE
+                ON DELETE RESTRICT
+        ) ENGINE=InnoDB
+          DEFAULT CHARACTER SET=utf8mb4
+          COLLATE=utf8mb4_0900_ai_ci
+    </update>
+
+    <update id="createDongCacheTable">
+        CREATE TABLE IF NOT EXISTS bus_stop_dong_cache (
+            stops_no VARCHAR(30) NOT NULL,
+            latitude DECIMAL(10, 7) NOT NULL,
+            longitude DECIMAL(11, 7) NOT NULL,
+            dong_code VARCHAR(10) NULL,
+            last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (stops_no),
+            KEY idx_bus_stop_dong_cache_dong_code (dong_code),
+            CONSTRAINT fk_bus_stop_dong_cache_dong
+                FOREIGN KEY (dong_code) REFERENCES dongcodes (dong_code)
+                ON UPDATE CASCADE
+                ON DELETE SET NULL
+        ) ENGINE=InnoDB
+          DEFAULT CHARACTER SET=utf8mb4
+          COLLATE=utf8mb4_0900_ai_ci
+    </update>
+
+    <select id="findAllCachedStops"
+            resultType="com.ssafy.prj.batch.bus.BusStopCacheEntry">
+        SELECT
+            stops_no AS stopsNo,
+            latitude,
+            longitude,
+            dong_code AS dongCode
+        FROM bus_stop_dong_cache
+    </select>
+
+    <select id="findExistingDongCodes" resultType="string">
+        SELECT dong_code
+        FROM dongcodes
+        WHERE dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+    </select>
+
+    <insert id="upsertDongCaches">
+        INSERT INTO bus_stop_dong_cache
+            (stops_no, latitude, longitude, dong_code)
+        VALUES
+        <foreach collection="caches" item="cache" separator=",">
+            (#{cache.stopsNo}, #{cache.latitude}, #{cache.longitude}, #{cache.dongCode})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            latitude = VALUES(latitude),
+            longitude = VALUES(longitude),
+            dong_code = VALUES(dong_code),
+            last_seen_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <delete id="deleteAllMetrics">
+        DELETE FROM dong_bus_stop_metrics
+    </delete>
+
+    <insert id="insertMetrics">
+        INSERT INTO dong_bus_stop_metrics
+            (dong_code, bus_stop_count, source_date)
+        VALUES
+        <foreach collection="metrics" item="metric" separator=",">
+            (#{metric.dongCode}, #{metric.busStopCount}, #{metric.sourceDate})
+        </foreach>
+    </insert>
+
+</mapper>
