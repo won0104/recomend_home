@@ -15,13 +15,16 @@ import com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendRequest;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodRecommendResponse;
 import com.ssafy.prj.model.dto.neighborhood.CategoryScore;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodCommercialCount;
+import com.ssafy.prj.model.dto.neighborhood.NeighborhoodBusStopCount;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodParkCount;
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodSchoolCount;
+import com.ssafy.prj.model.dto.neighborhood.NeighborhoodSubwayCount;
 import com.ssafy.prj.model.dto.neighborhood.RecommendedNeighborhood;
 import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
 import com.ssafy.prj.model.mapper.neighborhood.NeighborhoodRecommendMapper;
 import com.ssafy.prj.model.mapper.neighborhood.ParkMapper;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
+import com.ssafy.prj.model.mapper.neighborhood.TransportMetricMapper;
 import com.ssafy.prj.model.service.neighborhood.score.CategoryScoreCalculator;
 
 import lombok.RequiredArgsConstructor;
@@ -57,6 +60,7 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
     private final SchoolMapper schoolMapper;
     private final ParkMapper parkMapper;
     private final CommercialMetricMapper commercialMetricMapper;
+    private final TransportMetricMapper transportMetricMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -300,6 +304,12 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             .toList();
         Map<String, Integer> schoolCounts = toSchoolCountMap(schoolMapper.countByDongCodes(recommendedCodes));
         Map<String, Integer> parkCounts = toParkCountMap(parkMapper.countByDongCodes(recommendedCodes));
+        Map<String, Integer> busStopCounts = Map.of();
+        Map<String, NeighborhoodSubwayCount> subwayCounts = Map.of();
+        if (priorities.contains(SurveyCategory.TRANSPORT)) {
+            busStopCounts = toBusStopCountMap(transportMetricMapper.countBusStopsByDongCodes(recommendedCodes));
+            subwayCounts = toSubwayCountMap(transportMetricMapper.countSubwaysByDongCodes(recommendedCodes));
+        }
 
         // 상권 지표는 사용자가 실제로 고른 카테고리에 필요한 것만 조회한다.
         Map<String, Map<String, Integer>> commercialCountsByMetric = new HashMap<>();
@@ -343,7 +353,9 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
                         recommendation.getLawdCd(),
                         schoolCounts,
                         parkCounts,
-                        commercialCountsByMetric
+                        commercialCountsByMetric,
+                        busStopCounts,
+                        subwayCounts
                     ));
             }
         }
@@ -360,7 +372,7 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
             case SHOPPING -> List.of("SHOPPING_GROCERY", "SHOPPING_GENERAL");
             case MEDICAL -> List.of("MEDICAL");
             case PET -> List.of("PET_SUPPLIES", "ANIMAL_HOSPITAL");
-            case SCHOOL, PARK -> List.of();
+            case SCHOOL, PARK, TRANSPORT -> List.of();
         };
     }
 
@@ -370,7 +382,9 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         String dongCode,
         Map<String, Integer> schoolCounts,
         Map<String, Integer> parkCounts,
-        Map<String, Map<String, Integer>> commercialCountsByMetric
+        Map<String, Map<String, Integer>> commercialCountsByMetric,
+        Map<String, Integer> busStopCounts,
+        Map<String, NeighborhoodSubwayCount> subwayCounts
     ) {
         return switch (category) {
             case SCHOOL -> "schoolCount=" + schoolCounts.getOrDefault(dongCode, 0);
@@ -393,6 +407,13 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
                 yield "petSuppliesCount=" + petSuppliesCount
                     + ", parkCount=" + parkCounts.getOrDefault(dongCode, 0)
                     + ", animalHospitalCount=" + animalHospitalCount;
+            }
+            case TRANSPORT -> {
+                NeighborhoodSubwayCount subwayCount = subwayCounts.getOrDefault(dongCode, new NeighborhoodSubwayCount());
+                yield "busStopCount=" + busStopCounts.getOrDefault(dongCode, 0)
+                    + ", subwayStationCount=" + subwayCount.getStationCount()
+                    + ", subwayLineCount=" + subwayCount.getLineCount()
+                    + ", subwayIndex=" + subwayCount.getSubwayIndex();
             }
         };
     }
@@ -434,6 +455,28 @@ public class NeighborhoodRecommendServiceImpl implements NeighborhoodRecommendSe
         if (counts != null) {
             for (NeighborhoodCommercialCount count : counts) {
                 result.put(count.getDongCode(), count.getBusinessCount());
+            }
+        }
+        return result;
+    }
+
+    /** TransportMetricMapper의 버스 정류장 DTO 목록을 코드 -> 정류장 수 Map으로 바꾼다. */
+    private Map<String, Integer> toBusStopCountMap(List<NeighborhoodBusStopCount> counts) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        if (counts != null) {
+            for (NeighborhoodBusStopCount count : counts) {
+                result.put(count.getDongCode(), count.getBusStopCount());
+            }
+        }
+        return result;
+    }
+
+    /** TransportMetricMapper의 지하철 DTO 목록을 코드 -> 지하철 집계 DTO Map으로 바꾼다. */
+    private Map<String, NeighborhoodSubwayCount> toSubwayCountMap(List<NeighborhoodSubwayCount> counts) {
+        Map<String, NeighborhoodSubwayCount> result = new LinkedHashMap<>();
+        if (counts != null) {
+            for (NeighborhoodSubwayCount count : counts) {
+                result.put(count.getDongCode(), count);
             }
         }
         return result;

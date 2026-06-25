@@ -23,6 +23,7 @@ import com.ssafy.prj.model.mapper.neighborhood.NeighborhoodRecommendMapper;
 import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
 import com.ssafy.prj.model.mapper.neighborhood.ParkMapper;
 import com.ssafy.prj.model.mapper.neighborhood.SchoolMapper;
+import com.ssafy.prj.model.mapper.neighborhood.TransportMetricMapper;
 import com.ssafy.prj.model.service.neighborhood.score.CategoryScoreCalculator;
 
 /**
@@ -53,6 +54,10 @@ class NeighborhoodRecommendServiceImplTest {
     @Mock
     private CommercialMetricMapper commercialMetricMapper;
 
+    /** 최종 로그에 교통 지표 개수를 표시하기 위한 Mapper다. */
+    @Mock
+    private TransportMetricMapper transportMetricMapper;
+
     private NeighborhoodRecommendServiceImpl recommendService;
 
     @BeforeEach
@@ -62,7 +67,8 @@ class NeighborhoodRecommendServiceImplTest {
             List.of(cafeScoreCalculator, parkScoreCalculator, petScoreCalculator),
             schoolMapper,
             parkMapper,
-            commercialMetricMapper
+            commercialMetricMapper,
+            transportMetricMapper
         );
     }
 

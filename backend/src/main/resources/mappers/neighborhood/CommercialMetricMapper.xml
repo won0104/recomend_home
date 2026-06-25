@@ -19,4 +19,17 @@
         </foreach>
         ORDER BY d.dong_code
     </select>
+
+    <select id="countAllSeoulDongCodesByCategory"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodCommercialCount">
+        SELECT
+            d.dong_code AS dongCode,
+            COALESCE(m.business_count, 0) AS businessCount
+        FROM dongcodes d
+        LEFT JOIN dong_commercial_metrics m
+            ON m.dong_code = d.dong_code
+           AND m.category = #{category}
+        WHERE LEFT(d.dong_code, 2) = '11'
+        ORDER BY d.dong_code
+    </select>
 </mapper>

@@ -12,6 +12,20 @@ const housingOptions = [
   { value: '오피스텔', icon: '🏙️', label: '오피스텔' },
   { value: '주택', icon: '🏠', label: '주택' },
 ]
+
+/**
+ * 현재 동네 추천 로직은 아파트 거래 데이터만 추천 조건으로 사용한다.
+ * 그래서 오피스텔/주택 버튼은 UI에 남겨두되, 사용자가 누르면 준비 중 안내만 보여주고
+ * 실제 선택값은 바꾸지 않는다. 이렇게 해야 아직 지원하지 않는 주거 형태가 API 요청에 섞이지 않는다.
+ */
+function selectHousingType(option) {
+  if (option.value !== '아파트') {
+    alert('아직 추가 중이에요!')
+    return
+  }
+
+  emit('update:housingType', option.value)
+}
 </script>
 
 <template>
@@ -46,7 +60,7 @@ const housingOptions = [
           type="button"
           class="housing-option"
           :class="{ 'is-selected': housingType === option.value }"
-          @click="emit('update:housingType', option.value)"
+          @click="selectHousingType(option)"
         >
           <span class="housing-option__icon">{{ option.icon }}</span>
           <span class="housing-option__label">{{ option.label }}</span>

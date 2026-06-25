@@ -14,4 +14,8 @@ public interface CommercialMetricMapper {
         @Param("dongCodes") List<String> dongCodes,
         @Param("category") String category
     );
+
+    List<NeighborhoodCommercialCount> countAllSeoulDongCodesByCategory(
+        @Param("category") String category
+    );
 }

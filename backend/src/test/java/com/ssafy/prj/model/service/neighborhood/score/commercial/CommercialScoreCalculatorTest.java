@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,23 +15,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodCommercialCount;
 import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
-import com.ssafy.prj.model.service.neighborhood.score.RelativeScorePolicy;
 import com.ssafy.prj.model.service.neighborhood.SurveyCategory;
+import com.ssafy.prj.model.service.neighborhood.score.PercentileScorePolicy;
 
 /**
- * {@link CommercialScoreCalculator}가 상권 업소 수를 상대 점수로 바꾸는지만 검증하는 단위 테스트다.
- *
- * <p>이 테스트에서는 DB를 연결하지 않는다. Mapper가 이미 "동별 업소 수"를 조회해 왔다고 가정하고,
- * Mockito로 그 조회 결과를 직접 준비한다. 실제 DB 조회와 Mapper SQL은
- * {@code CommercialScoreCalculatorIntegrationTest}에서 별도로 검증한다.</p>
+ * 상권 계열 점수 계산기가 후보군 상대평가가 아니라 서울 전체 기준 백분위 점수를 쓰는지 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
 class CommercialScoreCalculatorTest {
 
-    /**
-     * DB 조회 역할만 가짜로 대체한다.
-     * 점수 계산 규칙 자체에만 집중하기 위해서다.
-     */
     @Mock
     private CommercialMetricMapper commercialMetricMapper;
 
@@ -38,74 +31,76 @@ class CommercialScoreCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        // 운영 코드와 동일하게 Mapper와 상대평가 정책을 계산기에 주입한다.
-        calculator = new CommercialScoreCalculator(commercialMetricMapper, new RelativeScorePolicy());
+        calculator = new CommercialScoreCalculator(commercialMetricMapper, new PercentileScorePolicy());
     }
 
     @Test
-    void 카페외식_업소_수를_후보_동_사이의_상대_점수로_변환한다() {
-        // 1. 추천 후보 동 3개를 준비한다.
-        List<String> dongCodes = List.of("1111010100", "1121510300", "1135010300");
+    void 카페외식_업소_수를_서울_전체_분포_기준_백분위_점수로_변환한다() {
+        List<String> dongCodes = List.of("A", "B", "C");
 
-        // 2. DB가 조회했다고 가정할 상권 통계값을 준비한다.
-        //    - 첫 번째 동: 30개(가장 많음)
-        //    - 두 번째 동: 10개
-        //    - 세 번째 동: 0개(상권 데이터가 없거나 해당 업종이 없음)
         when(commercialMetricMapper.countByDongCodes(dongCodes, "CAFE_RESTAURANT"))
             .thenReturn(List.of(
-                commercialCount("1111010100", 30),
-                commercialCount("1121510300", 10),
-                commercialCount("1135010300", 0)
+                commercialCount("A", 30),
+                commercialCount("B", 10),
+                commercialCount("C", 0)
+            ));
+        when(commercialMetricMapper.countAllSeoulDongCodesByCategory("CAFE_RESTAURANT"))
+            .thenReturn(List.of(
+                commercialCount("A", 30),
+                commercialCount("B", 10),
+                commercialCount("C", 0),
+                commercialCount("D", 5)
             ));
 
-        // 3. 실제 점수 계산기를 실행한다.
         Map<String, Double> scores = calculator.calculateScores(dongCodes);
 
-        // 4. 상대평가 결과를 검증한다.
-        //    30개는 후보 중 1위이므로 100점이다.
-        assertThat(scores).containsEntry("1111010100", 100.0);
-
-        //    10개는 3개 후보 중 한 곳보다 적으므로 100 - (100 / 3)점이다.
-        assertThat(scores).containsEntry("1121510300", 100.0 - (100.0 / 3));
-
-        //    업소 수가 0이면 상대 순위와 관계없이 0점이어야 한다.
-        assertThat(scores).containsEntry("1135010300", 0.0);
+        assertThat(scores).containsEntry("A", 100.0);
+        assertThat(scores.get("B")).isCloseTo(42.973967099940694, Offset.offset(0.000001));
+        assertThat(scores).containsEntry("C", 0.0);
     }
 
     @Test
-    void 운동문화_계산기는_R1_배치_통계인_CULTURE_SPORTS를_조회한다() {
-        // 운동·문화도 공용 상대평가 로직을 쓰되, DB에서 읽는 통계 category만 다르다.
+    void 운동문화_계산기는_CULTURE_SPORTS_통계를_조회한다() {
         CultureSportsScoreCalculator cultureCalculator = new CultureSportsScoreCalculator(
             commercialMetricMapper,
-            new RelativeScorePolicy()
+            new PercentileScorePolicy()
         );
-        List<String> dongCodes = List.of("1111010100");
+        List<String> dongCodes = List.of("A");
+
         when(commercialMetricMapper.countByDongCodes(dongCodes, "CULTURE_SPORTS"))
-            .thenReturn(List.of(commercialCount("1111010100", 12)));
+            .thenReturn(List.of(commercialCount("A", 12)));
+        when(commercialMetricMapper.countAllSeoulDongCodesByCategory("CULTURE_SPORTS"))
+            .thenReturn(List.of(commercialCount("A", 12)));
 
         assertThat(cultureCalculator.category()).isEqualTo(SurveyCategory.CULTURE);
-        assertThat(cultureCalculator.calculateScores(dongCodes)).containsEntry("1111010100", 100.0);
+        assertThat(cultureCalculator.calculateScores(dongCodes)).containsEntry("A", 100.0);
     }
 
     @Test
-    void 의료_계산기는_Q1_배치_통계인_MEDICAL을_조회한다() {
-        // 의료 역시 카페·외식과 동일한 흐름을 재사용하며, SurveyCategory와 DB category만 다르다.
+    void 의료_계산기는_MEDICAL_통계를_조회하고_최소_양수_점수를_20점으로_둔다() {
         MedicalScoreCalculator medicalCalculator = new MedicalScoreCalculator(
             commercialMetricMapper,
-            new RelativeScorePolicy()
+            new PercentileScorePolicy()
         );
-        List<String> dongCodes = List.of("1111010100");
+        List<String> dongCodes = List.of("A", "B");
+
         when(commercialMetricMapper.countByDongCodes(dongCodes, "MEDICAL"))
-            .thenReturn(List.of(commercialCount("1111010100", 8)));
+            .thenReturn(List.of(
+                commercialCount("A", 8),
+                commercialCount("B", 1)
+            ));
+        when(commercialMetricMapper.countAllSeoulDongCodesByCategory("MEDICAL"))
+            .thenReturn(List.of(
+                commercialCount("A", 8),
+                commercialCount("B", 1),
+                commercialCount("C", 0)
+            ));
 
         assertThat(medicalCalculator.category()).isEqualTo(SurveyCategory.MEDICAL);
-        assertThat(medicalCalculator.calculateScores(dongCodes)).containsEntry("1111010100", 100.0);
+        assertThat(medicalCalculator.calculateScores(dongCodes)).containsEntry("A", 100.0);
+        assertThat(medicalCalculator.calculateScores(dongCodes)).containsEntry("B", 20.0);
     }
 
-    /**
-     * 테스트에서 Mapper의 반환 형태를 간단히 만들기 위한 보조 메서드다.
-     * 실제 SQL 조회 결과의 {@code dong_code}, {@code business_count} 두 컬럼을 표현한다.
-     */
     private NeighborhoodCommercialCount commercialCount(String dongCode, int businessCount) {
         NeighborhoodCommercialCount count = new NeighborhoodCommercialCount();
         count.setDongCode(dongCode);
