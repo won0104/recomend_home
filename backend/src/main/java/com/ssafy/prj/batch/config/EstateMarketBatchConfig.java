@@ -11,9 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import com.ssafy.prj.batch.tasklet.EstateMarketAiTasklet;
 import com.ssafy.prj.batch.tasklet.EstateMarketCollectTasklet;
-import com.ssafy.prj.batch.tasklet.EstateMarketPdfTasklet;
 import com.ssafy.prj.batch.tasklet.EstateMarketSaveTasklet;
 
 @Configuration
@@ -38,35 +36,13 @@ public class EstateMarketBatchConfig {
     }
 
     @Bean
-    public Step estateMarketAiStep(JobRepository jobRepository,
-            PlatformTransactionManager transactionManager,
-            EstateMarketAiTasklet tasklet) {
-        return new StepBuilder("estateMarketAiStep", jobRepository)
-                .tasklet(tasklet, transactionManager)
-                .build();
-    }
-
-    @Bean
-    public Step estateMarketPdfStep(JobRepository jobRepository,
-            PlatformTransactionManager transactionManager,
-            EstateMarketPdfTasklet tasklet) {
-        return new StepBuilder("estateMarketPdfStep", jobRepository)
-                .tasklet(tasklet, transactionManager)
-                .build();
-    }
-
-    @Bean
     public Job estateMarketBatchJob(JobRepository jobRepository,
             @Qualifier("estateMarketCollectStep") Step collectStep,
-            @Qualifier("estateMarketSaveStep") Step saveStep,
-            @Qualifier("estateMarketAiStep") Step aiStep,
-            @Qualifier("estateMarketPdfStep") Step pdfStep) {
+            @Qualifier("estateMarketSaveStep") Step saveStep) {
         return new JobBuilder("estateMarketBatchJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(collectStep)
                 .next(saveStep)
-                .next(aiStep)
-                .next(pdfStep)
                 .build();
     }
 }

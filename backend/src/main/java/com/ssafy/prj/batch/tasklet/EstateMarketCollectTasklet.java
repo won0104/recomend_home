@@ -268,7 +268,6 @@ public class EstateMarketCollectTasklet implements Tasklet {
         report.setDealYmd(String.join(",", targetDealYmds));
         report.setCollectedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
         report.setItemCount(items.size());
-        report.setAiStatus("PENDING");
 
         if (!items.isEmpty()) {
             int sum = items.stream().mapToInt(EstateMarketItem::getDealAmount).sum();

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
   PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
   "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
@@ -30,9 +30,6 @@
         <result column="avg_deal_amount" property="avgDealAmount" />
         <result column="max_deal_amount" property="maxDealAmount" />
         <result column="min_deal_amount" property="minDealAmount" />
-        <result column="ai_summary" property="aiSummary" />
-        <result column="ai_status" property="aiStatus" />
-        <result column="pdf_path" property="pdfPath" />
     </resultMap>
 
     <update id="createReportTable">
@@ -46,9 +43,6 @@
             avg_deal_amount INT NOT NULL DEFAULT 0,
             max_deal_amount INT NOT NULL DEFAULT 0,
             min_deal_amount INT NOT NULL DEFAULT 0,
-            ai_summary TEXT,
-            ai_status VARCHAR(30),
-            pdf_path VARCHAR(1000),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
@@ -123,10 +117,10 @@
     <insert id="insertReport" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
         INSERT INTO batch_estate_market_reports
             (report_id, title, lawd_cd, deal_ymd, collected_at, item_count,
-             avg_deal_amount, max_deal_amount, min_deal_amount, ai_status)
+             avg_deal_amount, max_deal_amount, min_deal_amount)
         VALUES
             (#{reportId}, #{title}, #{lawdCd}, #{dealYmd}, #{collectedAt}, #{itemCount},
-             #{avgDealAmount}, #{maxDealAmount}, #{minDealAmount}, #{aiStatus})
+             #{avgDealAmount}, #{maxDealAmount}, #{minDealAmount})
     </insert>
 
     <insert id="insertItems">
@@ -149,8 +143,7 @@
     -->
     <select id="findReportById" resultMap="estateMarketReportMap">
         SELECT report_id, title, lawd_cd, deal_ymd, collected_at, item_count,
-               avg_deal_amount, max_deal_amount, min_deal_amount,
-               ai_summary, ai_status, pdf_path
+               avg_deal_amount, max_deal_amount, min_deal_amount
         FROM batch_estate_market_reports
         WHERE report_id = #{reportId}
     </select>
@@ -288,19 +281,6 @@
         SET latitude = #{latitude},
             longitude = #{longitude}
         WHERE apt_seq = #{aptSeq}
-    </update>
-
-    <update id="updateAiResult" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
-        UPDATE batch_estate_market_reports
-        SET ai_summary = #{aiSummary},
-            ai_status = #{aiStatus}
-        WHERE report_id = #{reportId}
-    </update>
-
-    <update id="updatePdfPath" parameterType="com.ssafy.prj.batch.domain.EstateMarketReport">
-        UPDATE batch_estate_market_reports
-        SET pdf_path = #{pdfPath}
-        WHERE report_id = #{reportId}
     </update>
 
     <select id="selectAllLawdCodes" resultType="string">

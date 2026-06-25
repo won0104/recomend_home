@@ -42,10 +42,6 @@ public interface EstateMarketBatchDao {
             @Param("latitude") String latitude,
             @Param("longitude") String longitude);
 
-    int updateAiResult(EstateMarketReport report);
-
-    int updatePdfPath(EstateMarketReport report);
-
     List<String> selectAllLawdCodes();
 
     List<String> selectLawdCodesBySido(@Param("sidoName") String sidoName);

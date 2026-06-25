@@ -378,28 +378,156 @@ pjt11_buk03_15_09
 
 ## 실행 방법
 
-### 1. DB 준비
+### 사전 요구사항
 
-MySQL에 `ssafy_home` 스키마와 기본 데이터를 적재합니다.
+| 항목 | 버전 | 비고 |
+|------|------|------|
+| Java | 21 | |
+| Maven | 3.9+ | `./mvnw` 래퍼 포함 |
+| Node.js | 18+ | |
+| pnpm | 8+ | `npm install -g pnpm` |
+| MySQL | 8.x | |
+| Redis | 7+ | 챗봇 세션 저장용. Docker 사용 가능 |
 
-```powershell
-mysql -u ssafy -p --default-character-set=utf8mb4 ssafy_home < sql\SSAFY_HOME_Schema.sql
-mysql -u ssafy -p --default-character-set=utf8mb4 ssafy_home < sql\SSAFY_HOME_Dump_2604.sql
-mysql -u ssafy -p --default-character-set=utf8mb4 ssafy_home < sql\users_and_favorites.sql
-mysql -u ssafy -p --default-character-set=utf8mb4 ssafy_home < sql\notices.sql
-mysql -u ssafy -p --default-character-set=utf8mb4 ssafy_home < sql\boards.sql
-mysql -u ssafy -p --default-character-set=utf8mb4 ssafy_home < sql\commercials.sql
+Redis 빠른 실행 (Docker):
+
+```bash
+docker run -d --name redis -p 6379:6379 redis:7
 ```
 
-### 2. 상권 데이터 경량 샘플 생성
+<br>
 
-공공데이터포털에서 `소상공인시장진흥공단 상가(상권)정보` 파일 데이터를 다운로드한 뒤, 압축 해제 폴더를 아래 위치에 둡니다.
+### 1. 환경 변수 설정
+
+`backend/application-secret.properties` 파일을 생성하고 아래 값을 채웁니다.
+
+```properties
+# Kakao Developers > 내 애플리케이션 > 앱 키 > REST API 키
+KAKAO_REST_API_KEY=발급받은_키
+
+# SSAFY GMS 또는 OpenAI API 키 (AI 챗봇, 동네 요약에 사용)
+AI_API_KEY=발급받은_키
+
+# 공공데이터포털 아파트 실거래가 API 키 (배치 수집용, 선택)
+ESTATE_API_KEY=발급받은_키
+
+# JWT 서명 비밀키 (임의의 긴 문자열)
+JWT_SECRET=여기에_64자_이상의_랜덤_문자열_입력
+```
+
+> `AI_API_KEY`와 `KAKAO_REST_API_KEY`가 없으면 AI 챗봇과 동네 요약 기능이 동작하지 않습니다.
+
+<br>
+
+### 2. DB 스키마 및 기본 데이터 적재
+
+MySQL에 `ssafy_home` 데이터베이스를 먼저 생성합니다.
+
+```sql
+CREATE DATABASE ssafy_home CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'ssafy_home'@'localhost' IDENTIFIED BY 'ssafy_home';
+GRANT ALL PRIVILEGES ON ssafy_home.* TO 'ssafy_home'@'localhost';
+```
+
+아래 SQL 파일을 **순서대로** 실행합니다.
+
+```powershell
+# ① 전체 테이블 스키마 생성
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\SSAFY_HOME_Schema.sql
+
+# ② 법정동 코드 + 주택정보(houseinfos) + 매매 실거래(housedeals) 기본 데이터
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\SSAFY_HOME_Dump_2604.sql
+
+# ③ 전월세 실거래 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\houserents.sql
+
+# ④ 회원 · 관심지역 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\users_and_favorites.sql
+
+# ⑤ 공지사항 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\notices.sql
+
+# ⑥ 자유게시판 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\boards.sql
+
+# ⑦ 상권 테이블 (스키마만, 데이터는 3단계에서 적재)
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\commercials.sql
+
+# ⑧ 동네 추천용 - 공원 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\parks.sql
+
+# ⑨ 동네 추천용 - 학교 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\schools.sql
+
+# ⑩ 동네 추천용 - 지하철역 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\subway_stations.sql
+
+# ⑪ 동네 추천용 - 상권 집계 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\dong_commercial_metrics.sql
+
+# ⑫ 동네 추천용 - 버스 정류소 집계 테이블
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\dong_bus_stop_metrics.sql
+
+# ⑬ 배치 리포트 테이블 (배치 기능 사용 시)
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\batch_estate_market.sql
+```
+
+각 테이블이 정상 생성되었는지 확인합니다.
+
+```sql
+USE ssafy_home;
+SHOW TABLES;
+-- 예상 결과: 16개 테이블
+```
+
+<br>
+
+### 3. 동네 추천 인프라 데이터 적재
+
+동네 추천 점수 계산에 필요한 공원·학교·지하철·상권 집계 데이터를 적재합니다.
+
+#### 공원 데이터
+
+```powershell
+# parks_for_import.csv 가 data/ 폴더에 있어야 합니다
+mysql -u ssafy_home -p --local-infile=1 --default-character-set=utf8mb4 ssafy_home < sql\load_parks.sql
+```
+
+#### 법정동 코드 (Dump에 포함되지 않은 경우)
+
+```powershell
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\load_dongcodes.sql
+```
+
+#### 지하철역 데이터
+
+`scripts/prepare_subway_stations.py`를 실행하면 `subway_stations` 테이블에 데이터가 적재됩니다.
+
+```powershell
+python scripts\prepare_subway_stations.py
+```
+
+#### 학교 데이터
+
+`scripts/prepare_schools.py` (또는 학교 CSV를 직접 INSERT) 실행 후 확인합니다.
+
+```sql
+SELECT COUNT(*) FROM schools;       
+SELECT COUNT(*) FROM parks;
+SELECT COUNT(*) FROM subway_stations;
+```
+
+<br>
+
+### 4. 상권 데이터 적재
+
+공공데이터포털에서 `소상공인시장진흥공단 상가(상권)정보` 파일을 다운로드한 뒤 압축 해제합니다.
 
 ```text
 data/소상공인시장진흥공단_상가(상권)정보_20260331/
 ```
 
-경량 샘플 CSV를 생성합니다.
+1/100 경량 샘플 CSV를 생성합니다.
 
 ```powershell
 python scripts\sample_commercials.py
@@ -414,52 +542,43 @@ data/summary/commercials_gyeonggi.csv
 data/summary/commercials_jeju.csv
 ```
 
-### 3. 상권 데이터 적재
-
-MySQL `local_infile`이 허용된 환경이라면 SQL 스크립트를 사용할 수 있습니다.
+MySQL `local_infile`이 허용된 환경이면 SQL 스크립트로 적재합니다.
 
 ```powershell
-mysql -u ssafy -p --local-infile=1 ssafy_home < sql\load_commercials_summary.sql
+mysql -u ssafy_home -p --local-infile=1 ssafy_home < sql\load_commercials_summary.sql
 ```
 
-`local_infile` 권한이 없으면 Java 로더로 적재합니다.
+`local_infile` 권한이 없으면 Java 로더를 사용합니다.
 
 ```powershell
-javac -cp C:\Users\hhy\.m2\repository\com\mysql\mysql-connector-j\9.7.0\mysql-connector-j-9.7.0.jar -d C:\tmp\commercial-load scripts\LoadCommercialSummary.java
-java -cp "C:\tmp\commercial-load;C:\Users\hhy\.m2\repository\com\mysql\mysql-connector-j\9.7.0\mysql-connector-j-9.7.0.jar" LoadCommercialSummary
+# mysql-connector-j 경로는 환경에 맞게 수정합니다
+javac -cp "C:\Users\<사용자>\.m2\repository\com\mysql\mysql-connector-j\9.7.0\mysql-connector-j-9.7.0.jar" -d out scripts\LoadCommercialSummary.java
+java  -cp "out;C:\Users\<사용자>\.m2\repository\com\mysql\mysql-connector-j\9.7.0\mysql-connector-j-9.7.0.jar" LoadCommercialSummary
 ```
 
-확인 쿼리:
+적재 확인:
 
 ```sql
-SELECT COUNT(*) FROM commercials;
-
-SELECT category_l_code, category_l_name, COUNT(*) AS cnt
-FROM commercials
-GROUP BY category_l_code, category_l_name
-ORDER BY category_l_code;
+SELECT COUNT(*) FROM commercials;  -- 약 27,000건 (전체의 1/100 샘플)
 ```
 
-### 4. 백엔드 실행
+<br>
+
+### 5. 백엔드 실행
 
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run
 ```
 
-백엔드 주소:
+| 항목 | 주소 |
+|------|------|
+| API 서버 | http://localhost:8080 |
+| Swagger UI | http://localhost:8080/swagger-ui.html |
 
-```text
-http://localhost:8080
-```
+<br>
 
-Swagger UI:
-
-```text
-http://localhost:8080/swagger-ui.html
-```
-
-### 5. 프론트엔드 실행
+### 6. 프론트엔드 실행
 
 ```powershell
 cd frontend
@@ -467,11 +586,32 @@ pnpm install
 pnpm dev
 ```
 
-프론트엔드 주소:
+| 항목 | 주소 |
+|------|------|
+| 웹 화면 | http://localhost:5173 |
 
-```text
-http://localhost:5173
-```
+<br>
+
+### 테이블별 역할 요약
+
+| 테이블 | 설명 | 필수 여부 |
+|--------|------|-----------|
+| `dongcodes` | 법정동 코드 마스터 | ✅ 필수 |
+| `houseinfos` | 아파트 기본 정보 | ✅ 필수 |
+| `housedeals` | 매매 실거래가 | ✅ 필수 |
+| `houserents` | 전월세 실거래가 | ✅ 필수 |
+| `users` | 회원 정보 | ✅ 필수 |
+| `favorite_areas` | 관심 지역 | ✅ 필수 |
+| `boards` | 자유게시판 | ✅ 필수 |
+| `notices` | 공지사항 | ✅ 필수 |
+| `commercials` | 상권 정보 (1/100 샘플) | ✅ 필수 |
+| `parks` | 공원 정보 | 동네 추천 사용 시 필수 |
+| `schools` | 학교 위치 | 동네 추천 사용 시 필수 |
+| `subway_stations` | 지하철역 위치 | 동네 추천 사용 시 필수 |
+| `dong_commercial_metrics` | 법정동별 상권 집계 | 동네 추천 사용 시 필수 |
+| `dong_bus_stop_metrics` | 법정동별 버스 정류소 수 | 동네 추천 사용 시 필수 |
+| `bus_stop_dong_cache` | 버스 정류소 좌표 캐시 | 자동 생성 |
+| `batch_estate_market_*` | 배치 리포트 | 배치 기능 사용 시 |
 
 <br>
 

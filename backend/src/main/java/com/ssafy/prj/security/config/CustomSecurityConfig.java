@@ -58,7 +58,7 @@ public class CustomSecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/members").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/regions/**", "/api/properties/**", "/api/commercials/**",
+                .requestMatchers(HttpMethod.GET, "/api/regions/**", "/api/properties/**",
                         "/api/boards", "/api/boards/{id}", "/api/notices", "/api/notices/{id}",
                         "/api/houses", "/api/houses/{aptSeq}", "/api/houses/{aptSeq}/deals").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

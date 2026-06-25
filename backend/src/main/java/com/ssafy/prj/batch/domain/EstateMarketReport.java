@@ -15,9 +15,6 @@ public class EstateMarketReport implements Serializable {
     private int avgDealAmount;
     private int maxDealAmount;
     private int minDealAmount;
-    private String aiSummary;
-    private String aiStatus;
-    private String pdfPath;
 
     public String getReportId() {
         return reportId;
@@ -89,29 +86,5 @@ public class EstateMarketReport implements Serializable {
 
     public void setMinDealAmount(int minDealAmount) {
         this.minDealAmount = minDealAmount;
-    }
-
-    public String getAiSummary() {
-        return aiSummary;
-    }
-
-    public void setAiSummary(String aiSummary) {
-        this.aiSummary = aiSummary;
-    }
-
-    public String getAiStatus() {
-        return aiStatus;
-    }
-
-    public void setAiStatus(String aiStatus) {
-        this.aiStatus = aiStatus;
-    }
-
-    public String getPdfPath() {
-        return pdfPath;
-    }
-
-    public void setPdfPath(String pdfPath) {
-        this.pdfPath = pdfPath;
     }
 }
