@@ -29,6 +29,3 @@ reference/*
 
 ERD_all.mwb.bak
 
-# local secrets
-**/application-secret.properties
-**/application-local.properties

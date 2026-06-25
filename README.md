@@ -15,6 +15,10 @@
 | API 문서 | springdoc-openapi, Swagger UI |
 | Data Source | 공공데이터포털 실거래 API, 소상공인시장진흥공단 상권 API, 서울시 버스 정류장 API, 파일 기반 학교·공원·지하철 데이터 |
 
+### 🧩 개발 스택 구조도
+
+![구해즈 홈줘 개발 스택 구조도](./images/architecture/development-stack.png)
+
 <br>
 
 ## 🧭 개발 구조
