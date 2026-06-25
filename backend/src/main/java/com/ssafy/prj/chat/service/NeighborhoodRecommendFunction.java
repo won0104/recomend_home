@@ -27,6 +27,8 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
 
     private final KakaoApiService kakaoApiService;
     private final NeighborhoodRecommendService neighborhoodRecommendService;
+    private final ChatStateService chatStateService;
+    private final ChatSessionContext chatSessionContext;
 
     @Override
     public ChatBotRecommendResult apply(ChatBotSlotDTO slot) {
@@ -74,6 +76,14 @@ public class NeighborhoodRecommendFunction implements Function<ChatBotSlotDTO, C
                 response.getTotalCount(),
                 response.getRecommendations() == null ? 0 : response.getRecommendations().size(),
                 response.getPriorities());
+            ChatSessionContext.CurrentChatSession currentSession = chatSessionContext.get();
+            if (currentSession != null && currentSession.sessionId() != null) {
+                chatStateService.saveRecommendations(
+                    currentSession.sessionId(),
+                    slot,
+                    response.getRecommendations()
+                );
+            }
             return new ChatBotRecommendResult(
                 slot.locationKeyword(),
                 place.latitude(),

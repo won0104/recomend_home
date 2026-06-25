@@ -12,7 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.prj.chat.dto.ChatBotRequest;
+import com.ssafy.prj.chat.dto.ChatBotSlotDTO;
+import com.ssafy.prj.chat.dto.ChatConversationState;
 import com.ssafy.prj.chat.dto.ChatMessageDTO;
+import com.ssafy.prj.chat.dto.ChatSessionState;
 import com.ssafy.prj.model.service.neighborhood.SurveyCategory;
 
 @Service
@@ -26,6 +29,15 @@ public class ChatBotService {
     private static final Pattern MONTHLY_RENT_PATTERN = Pattern.compile("(?:월세|월)\\s*(\\d+(?:\\.\\d+)?)(?:\\s*(만원|만))?");
     private static final Pattern SLASH_RENT_PATTERN = Pattern.compile("(\\d+(?:,\\d{3})*)\\s*/\\s*(\\d+(?:,\\d{3})*)");
     private static final Pattern LOCATION_PATTERN = Pattern.compile("([가-힣A-Za-z0-9]+(?:역|시청|구청|학교|대학교|병원|공원|터미널))");
+    private static final Pattern DONG_LOCATION_PATTERN = Pattern.compile("([가-힣A-Za-z0-9]+동)\\s*(?:기준|근처|주변|에서)");
+    private static final Pattern RANK_REFERENCE_PATTERN = Pattern.compile("([1-3])\\s*위|첫\\s*번째|두\\s*번째|세\\s*번째");
+    private static final List<String> EXPLANATION_REFERENCE_KEYWORDS = List.of("거기", "그 동네", "추천한 곳", "추천한곳");
+    private static final List<String> EXPLANATION_INTENT_KEYWORDS = List.of(
+        "자세히", "상세", "설명", "정보", "알려줘", "어때", "괜찮아", "장단점", "관점에서", "살기 좋아", "어떤 곳", "어떤곳"
+    );
+    private static final List<String> RECOMMENDATION_CHANGE_KEYWORDS = List.of(
+        "다시 추천", "조건 바꿔", "예산 바꿔", "반경 바꿔", "월세로", "전세로", "매매로", "다른 곳", "다른 동네", "추천해줘", "추천해 줘"
+    );
 
     private static final String SYSTEM_PROMPT = """
         너는 상냥하고 꼼꼼한 동네 추천 상담사야.
@@ -38,6 +50,12 @@ public class ChatBotService {
         - 이미 말한 조건은 다시 묻지 마.
         - 조건을 물을 때는 사용자가 바로 답하기 쉬운 예시를 함께 줘.
         - 조건이 부족한 상태에서는 recommendNeighborhood 함수를 실행하지 마.
+        - 추천 이후 특정 추천 동네나 순위를 설명해달라는 요청은 새 장소 조건으로 해석하지 마.
+        - 추천 이후 특정 추천 결과에 대한 상세 설명, 평가, 장단점 질문은 explainNeighborhoodWithRag 함수를 사용해.
+        - recommendNeighborhood는 새 추천 조건이 모두 모였을 때만 사용해.
+        - explainNeighborhoodWithRag는 최근 추천 결과의 순위나 동 이름을 설명할 때만 사용해.
+        - 추천 점수 숫자는 사용자에게 직접 보여주지 마. 점수는 순위와 설명을 만들기 위한 내부 근거로만 사용해.
+        - "임산부", "육아", "교육", "의료", "병원", "학교" 같은 단어는 상세설명 여부 판단 근거가 아니라 설명 focus로만 사용해.
         - "추천 동네를 찾아보겠습니다", "잠시만 기다려 주세요"처럼 작업 예정만 말하고 끝내면 안 돼.
 
         [필수 조건 6가지]
@@ -73,7 +91,7 @@ public class ChatBotService {
         예: "청담동" 또는 "강남구 청담동"이 아니라 "서울특별시 강남구 청담동"처럼 써.
 
         🏡 추천 동네 Top 3
-        1. 서울특별시 ○○구 ○○동 - 점수
+        1. 서울특별시 ○○구 ○○동
            ✅ 좋은 점: 핵심 강점 1~2개
            💡 이런 분께 좋아요: 사용자 조건과 연결한 짧은 설명
 
@@ -81,11 +99,19 @@ public class ChatBotService {
         """;
 
     private final ChatClient chatClient;
+    private final ChatStateService chatStateService;
+    private final ChatSessionContext chatSessionContext;
 
-    public ChatBotService(ChatClient.Builder chatClientBuilder) {
+    public ChatBotService(
+        ChatClient.Builder chatClientBuilder,
+        ChatStateService chatStateService,
+        ChatSessionContext chatSessionContext
+    ) {
+        this.chatStateService = chatStateService;
+        this.chatSessionContext = chatSessionContext;
         this.chatClient = chatClientBuilder
             .defaultSystem(SYSTEM_PROMPT)
-            .defaultToolNames("recommendNeighborhood")
+            .defaultToolNames("recommendNeighborhood", "explainNeighborhoodWithRag")
             .build();
     }
 
@@ -94,37 +120,187 @@ public class ChatBotService {
             throw new IllegalArgumentException("메시지를 입력해주세요.");
         }
 
-        int historyCount = request.history() == null ? 0 : request.history().size();
-        log.info("[ChatBot] request received. message={}, historyCount={}", request.message(), historyCount);
-        ChatConditionSnapshot snapshot = extractConditionSnapshot(request);
-        log.info("[ChatBot] condition snapshot from text. locationKeyword={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}, missing={}",
-            snapshot.locationKeyword(),
-            snapshot.radiusKm(),
-            snapshot.dealType(),
-            snapshot.dealAmountMax(),
-            snapshot.depositMax(),
-            snapshot.monthlyRentMax(),
-            snapshot.housingType(),
-            snapshot.priorities(),
-            snapshot.missingFields());
+        String sessionId = chatStateService.normalizeSessionId(request.sessionId());
+        List<ChatMessageDTO> redisHistory = chatStateService.getRecentMessages(sessionId);
+        List<ChatMessageDTO> effectiveHistory = redisHistory.isEmpty() && request.history() != null
+            ? request.history()
+            : redisHistory;
+        ChatBotRequest effectiveRequest = new ChatBotRequest(request.message(), effectiveHistory, sessionId);
+        ChatSessionState state = chatStateService.getState(sessionId);
 
-        String answer = callChatClient(buildUserPrompt(request, snapshot));
-        log.info("[ChatBot] first answer received. waitingOnly={}, answerLength={}",
-            isWaitingOnlyAnswer(answer),
-            answer == null ? 0 : answer.length());
-        if (isWaitingOnlyAnswer(answer)) {
-            answer = callChatClient(buildRetryPrompt(request, snapshot, answer));
-            log.info("[ChatBot] retry answer received. answerLength={}", answer == null ? 0 : answer.length());
+        int historyCount = effectiveHistory == null ? 0 : effectiveHistory.size();
+        log.info("[ChatBot] request received. sessionId={}, message={}, historyCount={}, state={}",
+            sessionId, request.message(), historyCount, state.getState());
+
+        chatStateService.appendMessage(sessionId, new ChatMessageDTO("user", request.message().trim()));
+        String answer;
+        if (isExplanationRequest(state, request.message()) && !isRecommendationChangeRequest(request.message())) {
+            chatSessionContext.set(sessionId, state.getLastConditions());
+            try {
+                answer = callExplanationClient(effectiveRequest, state);
+                chatStateService.markExplaining(sessionId);
+            } finally {
+                chatSessionContext.clear();
+            }
+        } else {
+            ChatConditionSnapshot snapshot = extractConditionSnapshot(effectiveRequest);
+            log.info("[ChatBot] condition snapshot from text. locationKeyword={}, radiusKm={}, dealType={}, dealAmountMax={}, depositMax={}, monthlyRentMax={}, housingType={}, priorities={}, missing={}",
+                snapshot.locationKeyword(),
+                snapshot.radiusKm(),
+                snapshot.dealType(),
+                snapshot.dealAmountMax(),
+                snapshot.depositMax(),
+                snapshot.monthlyRentMax(),
+                snapshot.housingType(),
+                snapshot.priorities(),
+                snapshot.missingFields());
+
+            chatSessionContext.set(sessionId, snapshot.toSlot());
+            try {
+                answer = callChatClient(buildUserPrompt(effectiveRequest, snapshot), snapshot.missingFields().isEmpty());
+                log.info("[ChatBot] first answer received. waitingOnly={}, answerLength={}",
+                    isWaitingOnlyAnswer(answer),
+                    answer == null ? 0 : answer.length());
+                if (isWaitingOnlyAnswer(answer)) {
+                    answer = callChatClient(buildRetryPrompt(effectiveRequest, snapshot, answer), snapshot.missingFields().isEmpty());
+                    log.info("[ChatBot] retry answer received. answerLength={}", answer == null ? 0 : answer.length());
+                }
+            } finally {
+                chatSessionContext.clear();
+            }
+
+            ChatSessionState updatedState = chatStateService.getState(sessionId);
+            if (updatedState.getState() != ChatConversationState.RECOMMENDATION_READY) {
+                chatStateService.markCollecting(sessionId, snapshot.toSlot());
+            }
         }
+        chatStateService.appendMessage(sessionId, new ChatMessageDTO("bot", answer));
         return answer;
     }
 
-    private String callChatClient(String userPrompt) {
-        return chatClient.prompt()
-            .toolNames("recommendNeighborhood")
-            .user(userPrompt)
+    private String callChatClient(String userPrompt, boolean allowRecommendationTool) {
+        var prompt = chatClient.prompt().user(userPrompt);
+        if (allowRecommendationTool) {
+            return prompt
+                .toolNames("recommendNeighborhood")
+                .call()
+                .content();
+        }
+
+        // 서버가 검산한 필수 조건이 아직 부족하면 추천 tool을 아예 열지 않는다.
+        // LLM이 부족한 housingType 등을 추론해서 "아파트" 같은 기본값으로 호출하는 것을 막기 위해서다.
+        return prompt
             .call()
             .content();
+    }
+
+    private String callExplanationClient(ChatBotRequest request, ChatSessionState state) {
+        String answer = chatClient.prompt()
+            .toolNames("explainNeighborhoodWithRag")
+            .user(buildExplanationPrompt(request, state))
+            .call()
+            .content();
+        return sanitizeExplanationAnswer(answer);
+    }
+
+    private String buildExplanationPrompt(ChatBotRequest request, ChatSessionState state) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("""
+            최근 추천 결과에 대한 상세 설명 요청이야.
+            반드시 explainNeighborhoodWithRag 함수를 호출해서 답변해.
+            사용자 메시지를 새 추천 조건의 locationKeyword로 해석하지 마.
+            함수 결과의 점수, 반영 기여도, 문서 chunk는 내부 근거로만 사용해.
+            점수 숫자는 답변에 직접 쓰지 마. "97점", "점수: 97.74", "score=97.74" 같은 표현은 금지야.
+            숫자 표나 원문 chunk를 그대로 복사하지 말고, 사용자의 질문에 맞춰 자연스러운 설명 문장으로 재구성해.
+            문서 근거가 없으면 없는 내용을 추측하지 말고 추천 점수 근거 중심으로 답해.
+            임산부/육아/교육/의료/병원/학교 같은 단어는 focusKeywords로만 사용해.
+            함수 결과의 answer를 중심으로 한국어로 간결하게 답해.
+            읽기 쉽게 답변해. 허용 형식은 ### 소제목, - 목록, **굵은 강조**만 사용해. 표는 사용하지 마.
+            각 동네별로 소제목을 만들고, 핵심은 2~3개 bullet로 정리해.
+            "장점:" 또는 "단점:" 같은 빈 라벨을 따로 만들지 말고 bullet 안에서 바로 설명해.
+            비교 질문이면 마지막에 ### 선택 기준 소제목을 만들고 한 문단으로 정리해.
+
+            [최근 추천 결과]
+            """);
+        if (state.getLastRecommendations() != null) {
+            state.getLastRecommendations().forEach(recommendation -> prompt.append("- ")
+                .append(recommendation.getRank())
+                .append("위: ")
+                .append(recommendation.getSidoName()).append(' ')
+                .append(recommendation.getSigunguName()).append(' ')
+                .append(recommendation.getDongName())
+                .append('\n'));
+        }
+        prompt.append("\n사용자 질문: ").append(request.message().trim());
+        return prompt.toString();
+    }
+
+    private String sanitizeExplanationAnswer(String answer) {
+        if (isBlank(answer)) {
+            return answer;
+        }
+        return answer
+            .replaceAll("(?m)^\\s*(장점|단점)\\s*:\\s*$", "")
+            .replaceAll("(?m)^\\s*점수\\s*:\\s*\\d+(?:\\.\\d+)?\\s*$", "")
+            .replaceAll("(?i)score\\s*=\\s*\\d+(?:\\.\\d+)?", "")
+            .replaceAll("\\d+(?:\\.\\d+)?\\s*점", "")
+            .replaceAll("\\n{3,}", "\n\n")
+            .trim();
+    }
+
+    private boolean isRecommendationChangeRequest(String message) {
+        if (isBlank(message)) {
+            return false;
+        }
+        for (String keyword : RECOMMENDATION_CHANGE_KEYWORDS) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return RADIUS_PATTERN.matcher(message).find() && (message.contains("추천") || message.contains("로"))
+            || EOK_BUDGET_PATTERN.matcher(message).find() && (message.contains("추천") || message.contains("로"));
+    }
+
+    private boolean isExplanationRequest(ChatSessionState state, String message) {
+        if (state == null || isBlank(message)) {
+            return false;
+        }
+        boolean hasReadyRecommendation = state.getState() == ChatConversationState.RECOMMENDATION_READY
+            || state.hasRecommendations();
+        if (!hasReadyRecommendation) {
+            return false;
+        }
+        return referencesRecommendation(state, message) && hasExplanationIntent(message);
+    }
+
+    private boolean referencesRecommendation(ChatSessionState state, String message) {
+        if (RANK_REFERENCE_PATTERN.matcher(message).find()) {
+            return true;
+        }
+        for (String keyword : EXPLANATION_REFERENCE_KEYWORDS) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        if (state.getLastRecommendations() == null) {
+            return false;
+        }
+        return state.getLastRecommendations().stream().anyMatch(recommendation ->
+            containsNonBlank(message, recommendation.getDongName())
+                || containsNonBlank(message, recommendation.getSigunguName()));
+    }
+
+    private boolean hasExplanationIntent(String message) {
+        for (String keyword : EXPLANATION_INTENT_KEYWORDS) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return message.endsWith("?") && (message.contains("은") || message.contains("는"));
+    }
+
+    private boolean containsNonBlank(String text, String token) {
+        return text != null && token != null && !token.isBlank() && text.contains(token);
     }
 
     private String buildRetryPrompt(ChatBotRequest request, ChatConditionSnapshot snapshot, String previousAnswer) {
@@ -360,6 +536,10 @@ public class ChatBotService {
         while (matcher.find()) {
             lastMatch = matcher.group(1);
         }
+        Matcher dongMatcher = DONG_LOCATION_PATTERN.matcher(joinedText);
+        while (dongMatcher.find()) {
+            lastMatch = dongMatcher.group(1);
+        }
         if (!isBlank(lastMatch)) {
             return lastMatch;
         }
@@ -488,6 +668,18 @@ public class ChatBotService {
         List<SurveyCategory> priorities,
         List<String> missingFields
     ) {
+        ChatBotSlotDTO toSlot() {
+            return new ChatBotSlotDTO(
+                locationKeyword,
+                radiusKm,
+                dealType,
+                dealAmountMax,
+                depositMax,
+                monthlyRentMax,
+                housingType,
+                priorities
+            );
+        }
     }
 
     private record BudgetSnapshot(
