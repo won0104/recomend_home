@@ -11,7 +11,7 @@ import StepIndicator from '../components/neighborhood/StepIndicator.vue'
 import TransactionHousingStep from '../components/neighborhood/TransactionHousingStep.vue'
 import { addFavorite, deleteFavorite, fetchFavorites } from '../api/favorites'
 import { fetchHouses } from '../api/houses'
-import { recommendNeighborhood } from '../api/neighborhoods'
+import { recommendNeighborhood, summarizeNeighborhood } from '../api/neighborhoods'
 import { number } from '../utils/format'
 
 // App.vue가 전달하는 로그인 정보를 이용한다. 비회원은 즐겨찾기 버튼을 보지 않는다.
@@ -59,6 +59,8 @@ let _loadingTimer = null
 const selectedNeighborhood = ref(null)
 const houseList = ref([])
 const houseLoading = ref(false)
+const aiSummary = ref(null)
+const aiSummaryLoading = ref(false)
 const highlightedAptSeq = ref(null) // 행 hover
 const pinnedAptSeq = ref(null)      // 지도 핀 클릭으로 고정된 행
 
@@ -91,6 +93,7 @@ function saveRecommendationState() {
     savedDealType: savedDealType.value,
     selectedNeighborhood: selectedNeighborhood.value,
     houseList: houseList.value,
+    aiSummary: aiSummary.value,
   }
   sessionStorage.setItem(RECOMMENDATION_SESSION_KEY, JSON.stringify(state))
 }
@@ -117,6 +120,7 @@ function restoreRecommendationState() {
     savedDealType.value = saved.savedDealType ?? dealType.value
     selectedNeighborhood.value = saved.selectedNeighborhood ?? null
     houseList.value = saved.houseList ?? []
+    aiSummary.value = saved.aiSummary ?? null
     screen.value = saved.screen
     return true
   } catch {
@@ -353,8 +357,46 @@ async function toggleFavorite(rec) {
   }
 }
 
+/**
+ * 추천 상세 화면의 AI 요약을 백엔드에서 생성한다.
+ * 백엔드는 이 요청에 담긴 추천 점수와 RAG 문서 검색 결과를 조합해
+ * 사용자가 이해하기 쉬운 비유가 섞인 요약 문장으로 바꿔준다.
+ */
+async function loadAiSummary(rec) {
+  if (!rec) {
+    aiSummary.value = null
+    return
+  }
+
+  aiSummaryLoading.value = true
+  try {
+    const response = await summarizeNeighborhood({
+      neighborhood: rec,
+      dealType: savedDealType.value || dealType.value,
+      budgetLabel: budgetLabel.value,
+      houseCount: houseList.value.length,
+      priorities: selectedLifestyleIds.value,
+    })
+    aiSummary.value = response?.data ?? null
+  } catch (error) {
+    console.error(error?.response?.data?.message || 'AI 동네 요약을 불러오지 못했습니다.')
+    aiSummary.value = {
+      lead: `${rec.dongName}은 현재 추천 점수 기준으로 생활환경을 해석할 수 있는 후보지예요.`,
+      points: [
+        'AI/RAG 요약을 불러오지 못해 화면의 생활 분석 점수 중심으로 확인해주세요.',
+        '점수는 공개 데이터 기반의 상대적 해석이며, 실제 생활 동선은 지도와 매물 목록을 함께 보는 것이 좋아요.',
+      ],
+      ragDocumentFound: false,
+      caution: '요약 API 호출에 실패해 임시 안내 문구를 표시했습니다.',
+    }
+  } finally {
+    aiSummaryLoading.value = false
+  }
+}
+
 async function openDetail(rec) {
   selectedNeighborhood.value = rec
+  aiSummary.value = null
   moveToScreen('detail')
   houseLoading.value = true
   houseList.value = []
@@ -375,6 +417,7 @@ async function openDetail(rec) {
     houseList.value = []
   } finally {
     houseLoading.value = false
+    await loadAiSummary(rec)
   }
 }
 
@@ -406,7 +449,7 @@ async function submitRecommendation() {
 watch([
   screen, selectedPlace, commuteRadius, budgetAmount, dealType, housingType, monthlyRentMax,
   selectedLifestyleIds, lifestyleMood, recommendations, totalCandidateCount, savedDealType,
-  selectedNeighborhood, houseList,
+  selectedNeighborhood, houseList, aiSummary,
 ], saveRecommendationState, { deep: true })
 
 // 브라우저 뒤로가기/앞으로가기는 URL query의 step만 바꾼다. 그 변경을 화면 단계에 반영한다.
@@ -452,6 +495,12 @@ onMounted(() => {
   } else if (restored && screen.value !== 'search') {
     // 주소에 step이 없더라도 같은 탭의 마지막 단계가 있다면 URL도 복원 상태와 일치시킨다.
     moveToScreen(screen.value, true)
+  }
+
+  // 상세 화면을 새로고침으로 복원했는데 요약 결과가 저장되어 있지 않다면,
+  // 이미 복원된 추천 동네와 매물 수를 기준으로 AI/RAG 요약만 다시 요청한다.
+  if (screen.value === 'detail' && selectedNeighborhood.value && !aiSummary.value) {
+    loadAiSummary(selectedNeighborhood.value)
   }
 })
 </script>
@@ -616,8 +665,8 @@ onMounted(() => {
                       {{ scoreTopPercent(cs.score) }}%
                     </strong>
                     <span v-else class="nr-detail-score-item__percent">비교 데이터 부족</span>
-                    :
-                    {{ categoryDesc[cs.category]?.[scoreLevel(cs.score)] }}
+<!--                    :-->
+<!--                    {{ categoryDesc[cs.category]?.[scoreLevel(cs.score)] }}-->
                   </p>
                 </li>
               </ul>
@@ -627,14 +676,23 @@ onMounted(() => {
               <div class="nr-detail-ai-summary-card__head">
                 <h3 class="nr-detail-section-title">AI가 분석한 동네 요약</h3>
               </div>
-              <p class="nr-detail-ai-summary-lead">
-                {{ selectedNeighborhood.dongName }}은 현재 설정한 조건을 기준으로 생활 환경과 주거 조건의 균형이 돋보이는 지역이에요.
-              </p>
-              <ul class="nr-detail-ai-summary-list">
-                <li>선호한 생활 요소를 일상에서 편하게 누릴 수 있는 후보지로 보여요.</li>
-                <li>매물의 거래 조건과 실제 생활 동선은 함께 비교해 보면 더 좋아요.</li>
-                <li>이 문구는 화면 구성을 위한 임시 AI 분석 예시입니다.</li>
-              </ul>
+              <div v-if="aiSummaryLoading" class="nr-detail-loading">AI가 점수와 RAG 문서를 함께 읽는 중...</div>
+              <template v-else>
+                <p class="nr-detail-ai-summary-lead">
+                  {{ aiSummary?.lead || `${selectedNeighborhood.dongName}은 현재 설정한 조건을 기준으로 생활환경을 해석할 수 있는 후보지예요.` }}
+                </p>
+                <ul class="nr-detail-ai-summary-list">
+                  <li
+                    v-for="point in (aiSummary?.points || ['생활 분석 점수와 매물 조건을 함께 비교해 보세요.'])"
+                    :key="point"
+                  >
+                    {{ point }}
+                  </li>
+                </ul>
+                <p v-if="aiSummary?.caution" class="nr-detail-ai-summary-caution">
+                  {{ aiSummary.caution }}
+                </p>
+              </template>
             </section>
           </section>
 

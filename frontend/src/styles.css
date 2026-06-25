@@ -2517,6 +2517,15 @@ dl.row dd {
   background: var(--primary, #079455);
   content: '';
 }
+.nr-detail-ai-summary-caution {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(7, 148, 85, .16);
+  color: var(--text-tertiary, #7a7f8a);
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: keep-all;
+}
 .nr-detail-loading, .nr-detail-empty {
   text-align: center;
   color: var(--text-secondary, #888);
