@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -28,6 +29,15 @@ public class NeighborhoodExplanationFunction implements Function<NeighborhoodExp
     private static final List<String> FOCUS_CANDIDATES = List.of(
         "임산부", "육아", "교육", "의료", "병원", "학교", "공원", "교통", "상권", "조용함",
         "카페", "외식", "문화", "운동", "장보기", "반려동물", "월세", "전세", "매매"
+    );
+    private static final Map<String, String> CATEGORY_LABELS = Map.of(
+        "SCHOOL", "교육",
+        "CAFE", "카페와 외식",
+        "CULTURE", "문화와 운동",
+        "SHOPPING", "장보기와 생활 편의",
+        "PARK", "공원과 산책",
+        "MEDICAL", "의료",
+        "PET", "반려동물"
     );
 
     private final ChatStateService chatStateService;
@@ -153,57 +163,119 @@ public class NeighborhoodExplanationFunction implements Function<NeighborhoodExp
     ) {
         String fullName = target.getSidoName() + " " + target.getSigunguName() + " " + target.getDongName();
         StringBuilder answer = new StringBuilder();
-        answer.append("🏡 ").append(fullName).append(" 상세 설명\n\n");
-        answer.append("추천 점수는 ").append(formatScore(target.getScore())).append("점이에요.");
+        answer.append("### 🏡 ").append(fullName).append("\n");
+        answer.append(fullName).append("은 ");
+        answer.append(overallTone(target.getScore())).append(" 추천된 동네예요.");
         if (!focuses.isEmpty()) {
-            answer.append(" 이번 답변은 ").append(String.join(", ", focuses)).append(" 관점으로 볼게요.");
+            answer.append(" 질문하신 ").append(String.join(", ", focuses)).append(" 관점에서 보면");
+        } else {
+            answer.append(" 조건 전체를 놓고 보면");
         }
-        answer.append("\n\n");
+        answer.append(" 핵심은 다음과 같아요.\n\n");
 
-        appendScoreEvidence(answer, target.getCategoryScores());
-        appendRagEvidence(answer, ragResults);
+        appendScoreNarrative(answer, target.getCategoryScores());
+        appendRagNarrative(answer, ragResults);
 
         if (focuses.stream().anyMatch(focus -> focus.contains("임산부") || focus.contains("의료") || focus.contains("병원"))) {
             answer.append("\n의료 관련 내용은 병원 접근성 같은 생활 인프라 관점의 참고 정보예요. 개인 건강 판단이나 진료 선택은 의료 전문가와 확인해 주세요.\n");
         }
-        answer.append("\n더 비교해보고 싶으면 다른 순위나 동 이름을 말해 주세요.");
+        answer.append("\n다른 추천 동네와 비교하면 어떤 기준에서 갈릴지도 이어서 볼 수 있어요.");
         return answer.toString();
     }
 
-    private void appendScoreEvidence(StringBuilder answer, List<CategoryScore> categoryScores) {
+    private void appendScoreNarrative(StringBuilder answer, List<CategoryScore> categoryScores) {
         if (categoryScores == null || categoryScores.isEmpty()) {
             return;
         }
-        answer.append("✅ 추천 점수 근거\n");
-        categoryScores.stream()
+        List<CategoryScore> topScores = categoryScores.stream()
             .sorted(Comparator.comparingDouble(CategoryScore::getContribution).reversed())
             .limit(3)
-            .forEach(score -> answer.append("- ")
-                .append(score.getCategory())
-                .append(": 점수 ")
-                .append(formatScore(score.getScore()))
-                .append(", 반영 기여 ")
-                .append(formatScore(score.getContribution()))
-                .append('\n'));
+            .toList();
+
+        answer.append("### ✅ 추천 조건\n");
+        for (CategoryScore score : topScores) {
+            answer.append("- **")
+                .append(categoryLabel(score.getCategory()))
+                .append("** 조건이 ")
+                .append(contributionTone(score.getContribution()))
+                .append(" 반영됐고 ")
+                .append(scoreTone(score.getScore()))
+                .append('\n');
+        }
         answer.append('\n');
     }
 
-    private void appendRagEvidence(StringBuilder answer, List<RagSearchResult> ragResults) {
+    private void appendRagNarrative(StringBuilder answer, List<RagSearchResult> ragResults) {
         if (ragResults == null || ragResults.isEmpty()) {
-            answer.append("📄 RAG 문서\n");
-            answer.append("- 관련 문서 chunk를 찾지 못해서, 추천 점수 근거 중심으로만 설명할게요.\n");
+            answer.append("문서에서 질문과 직접 맞는 생활 정보는 찾지 못해서, 추천 점수 근거 중심으로 설명했어요.\n");
             return;
         }
 
-        boolean embeddingBased = ragResults.stream().anyMatch(RagSearchResult::embeddingBased);
-        answer.append(embeddingBased ? "📄 문서 유사도 검색으로 확인한 생활 정보\n" : "📄 문서 키워드 검색으로 확인한 생활 정보\n");
-        for (RagSearchResult result : ragResults) {
-            answer.append("- ")
-                .append(result.sectionTitle())
-                .append(": ")
-                .append(result.content())
-                .append('\n');
+        answer.append("### 📍 생활 정보\n");
+        String evidence = ragResults.stream()
+            .limit(3)
+            .map(this::toNaturalEvidence)
+            .reduce((left, right) -> left + "\n- " + right)
+            .orElse("");
+        answer.append("- ").append(evidence).append("\n");
+    }
+
+    private String overallTone(Double score) {
+        if (score == null) {
+            return "사용자 조건과 비교해";
         }
+        if (score >= 80.0) {
+            return "사용자 조건과 꽤 잘 맞아서";
+        }
+        if (score >= 60.0) {
+            return "사용자 조건과 무난하게 맞아서";
+        }
+        return "일부 조건에 장점이 있어서";
+    }
+
+    private String contributionTone(double contribution) {
+        if (contribution >= 25.0) {
+            return "가장 크게";
+        }
+        if (contribution >= 15.0) {
+            return "꽤 크게";
+        }
+        if (contribution >= 8.0) {
+            return "보조적으로";
+        }
+        return "약하게";
+    }
+
+    private String scoreTone(double score) {
+        if (score >= 80.0) {
+            return "해당 항목 자체의 평가도 높은 편이에요";
+        }
+        if (score >= 60.0) {
+            return "해당 항목은 평균 이상으로 볼 수 있어요";
+        }
+        if (score >= 40.0) {
+            return "해당 항목은 무난하지만 압도적인 강점은 아니에요";
+        }
+        return "다만 해당 항목만 놓고 보면 강점은 제한적이에요";
+    }
+
+    private String categoryLabel(String category) {
+        return CATEGORY_LABELS.getOrDefault(category, category == null ? "생활" : category);
+    }
+
+    private String toNaturalEvidence(RagSearchResult result) {
+        String content = result.content();
+        if (content == null || content.isBlank()) {
+            return result.sectionTitle() + " 관련 생활 정보가 확인됩니다";
+        }
+        String normalized = content
+            .replaceAll("\\s+", " ")
+            .replace("입니다.", "인 편입니다.")
+            .trim();
+        if (normalized.length() > 120) {
+            normalized = normalized.substring(0, 120).trim() + "...";
+        }
+        return result.sectionTitle() + " 측면에서 " + normalized;
     }
 
     private String formatScore(Double value) {

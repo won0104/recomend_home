@@ -149,6 +149,17 @@ public class ChatStateService {
         saveState(sessionId, state);
     }
 
+    public void clearSession(String sessionId) {
+        String normalized = normalizeSessionId(sessionId);
+        fallbackMessages.remove(normalized);
+        fallbackStates.remove(normalized);
+        try {
+            redisTemplate.delete(List.of(messageKey(normalized), stateKey(normalized)));
+        } catch (Exception exception) {
+            log.debug("Redis chat session delete failed. sessionId={}", normalized, exception);
+        }
+    }
+
     private String messageKey(String sessionId) {
         return MESSAGE_KEY_PREFIX + sessionId;
     }

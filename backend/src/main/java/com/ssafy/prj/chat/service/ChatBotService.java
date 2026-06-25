@@ -54,6 +54,7 @@ public class ChatBotService {
         - 추천 이후 특정 추천 결과에 대한 상세 설명, 평가, 장단점 질문은 explainNeighborhoodWithRag 함수를 사용해.
         - recommendNeighborhood는 새 추천 조건이 모두 모였을 때만 사용해.
         - explainNeighborhoodWithRag는 최근 추천 결과의 순위나 동 이름을 설명할 때만 사용해.
+        - 추천 점수 숫자는 사용자에게 직접 보여주지 마. 점수는 순위와 설명을 만들기 위한 내부 근거로만 사용해.
         - "임산부", "육아", "교육", "의료", "병원", "학교" 같은 단어는 상세설명 여부 판단 근거가 아니라 설명 focus로만 사용해.
         - "추천 동네를 찾아보겠습니다", "잠시만 기다려 주세요"처럼 작업 예정만 말하고 끝내면 안 돼.
 
@@ -90,7 +91,7 @@ public class ChatBotService {
         예: "청담동" 또는 "강남구 청담동"이 아니라 "서울특별시 강남구 청담동"처럼 써.
 
         🏡 추천 동네 Top 3
-        1. 서울특별시 ○○구 ○○동 - 점수
+        1. 서울특별시 ○○구 ○○동
            ✅ 좋은 점: 핵심 강점 1~2개
            💡 이런 분께 좋아요: 사용자 조건과 연결한 짧은 설명
 
@@ -194,11 +195,12 @@ public class ChatBotService {
     }
 
     private String callExplanationClient(ChatBotRequest request, ChatSessionState state) {
-        return chatClient.prompt()
+        String answer = chatClient.prompt()
             .toolNames("explainNeighborhoodWithRag")
             .user(buildExplanationPrompt(request, state))
             .call()
             .content();
+        return sanitizeExplanationAnswer(answer);
     }
 
     private String buildExplanationPrompt(ChatBotRequest request, ChatSessionState state) {
@@ -207,8 +209,16 @@ public class ChatBotService {
             최근 추천 결과에 대한 상세 설명 요청이야.
             반드시 explainNeighborhoodWithRag 함수를 호출해서 답변해.
             사용자 메시지를 새 추천 조건의 locationKeyword로 해석하지 마.
+            함수 결과의 점수, 반영 기여도, 문서 chunk는 내부 근거로만 사용해.
+            점수 숫자는 답변에 직접 쓰지 마. "97점", "점수: 97.74", "score=97.74" 같은 표현은 금지야.
+            숫자 표나 원문 chunk를 그대로 복사하지 말고, 사용자의 질문에 맞춰 자연스러운 설명 문장으로 재구성해.
+            문서 근거가 없으면 없는 내용을 추측하지 말고 추천 점수 근거 중심으로 답해.
             임산부/육아/교육/의료/병원/학교 같은 단어는 focusKeywords로만 사용해.
             함수 결과의 answer를 중심으로 한국어로 간결하게 답해.
+            읽기 쉽게 답변해. 허용 형식은 ### 소제목, - 목록, **굵은 강조**만 사용해. 표는 사용하지 마.
+            각 동네별로 소제목을 만들고, 핵심은 2~3개 bullet로 정리해.
+            "장점:" 또는 "단점:" 같은 빈 라벨을 따로 만들지 말고 bullet 안에서 바로 설명해.
+            비교 질문이면 마지막에 ### 선택 기준 소제목을 만들고 한 문단으로 정리해.
 
             [최근 추천 결과]
             """);
@@ -219,11 +229,23 @@ public class ChatBotService {
                 .append(recommendation.getSidoName()).append(' ')
                 .append(recommendation.getSigunguName()).append(' ')
                 .append(recommendation.getDongName())
-                .append(", score=").append(recommendation.getScore())
                 .append('\n'));
         }
         prompt.append("\n사용자 질문: ").append(request.message().trim());
         return prompt.toString();
+    }
+
+    private String sanitizeExplanationAnswer(String answer) {
+        if (isBlank(answer)) {
+            return answer;
+        }
+        return answer
+            .replaceAll("(?m)^\\s*(장점|단점)\\s*:\\s*$", "")
+            .replaceAll("(?m)^\\s*점수\\s*:\\s*\\d+(?:\\.\\d+)?\\s*$", "")
+            .replaceAll("(?i)score\\s*=\\s*\\d+(?:\\.\\d+)?", "")
+            .replaceAll("\\d+(?:\\.\\d+)?\\s*점", "")
+            .replaceAll("\\n{3,}", "\n\n")
+            .trim();
     }
 
     private boolean isRecommendationChangeRequest(String message) {

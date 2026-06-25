@@ -110,6 +110,7 @@ public class RagSearchService {
                     cosineSimilarity(queryEmbedding, chunk.embedding()),
                     true
                 ))
+                .filter(result -> result.score() > 0.15)
                 .sorted(Comparator.comparingDouble(RagSearchResult::score).reversed())
                 .limit(Math.max(1, topK))
                 .toList());
@@ -129,6 +130,7 @@ public class RagSearchService {
                 keywordScore(chunk, searchTerms),
                 false
             ))
+            .filter(result -> result.score() > 0.0)
             .sorted(Comparator.comparingDouble(RagSearchResult::score).reversed())
             .limit(Math.max(1, topK))
             .toList();

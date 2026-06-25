@@ -1,19 +1,19 @@
 <script setup>
 import { nextTick, ref } from 'vue'
-import { sendChatMessage } from '../api/chat'
+import { resetChatSession, sendChatMessage } from '../api/chat'
 
 const CHAT_SESSION_KEY = 'ssafy-home-chat-session-id'
+const INITIAL_MESSAGE = {
+  role: 'bot',
+  content: '안녕하세요 😊\n원하는 동네를 함께 찾아드릴게요.\n\n📍 먼저 기준 위치를 알려주세요.\n예: 서울시청 근처, 강남역 주변, 삼성역에서 5km 안'
+}
 
 const input = ref('')
 const loading = ref(false)
-const messages = ref([
-  {
-    role: 'bot',
-    content: '안녕하세요 😊\n원하는 동네를 함께 찾아드릴게요.\n\n📍 먼저 기준 위치를 알려주세요.\n예: 서울시청 근처, 강남역 주변, 삼성역에서 5km 안'
-  }
-])
+const resetting = ref(false)
+const messages = ref([{ ...INITIAL_MESSAGE }])
 const listRef = ref(null)
-const sessionId = getOrCreateSessionId()
+const sessionId = ref(getOrCreateSessionId())
 
 function getOrCreateSessionId() {
   const existing = localStorage.getItem(CHAT_SESSION_KEY)
@@ -24,6 +24,35 @@ function getOrCreateSessionId() {
     : `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`
   localStorage.setItem(CHAT_SESSION_KEY, generated)
   return generated
+}
+
+function createSessionId() {
+  return crypto?.randomUUID
+    ? crypto.randomUUID()
+    : `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+async function startNewChat() {
+  if (loading.value || resetting.value) return
+
+  const previousSessionId = sessionId.value
+  resetting.value = true
+
+  try {
+    if (previousSessionId) {
+      await resetChatSession(previousSessionId)
+    }
+  } catch (error) {
+    console.warn('Failed to reset chat session.', error)
+  } finally {
+    const nextSessionId = createSessionId()
+    localStorage.setItem(CHAT_SESSION_KEY, nextSessionId)
+    sessionId.value = nextSessionId
+    input.value = ''
+    messages.value = [{ ...INITIAL_MESSAGE }]
+    resetting.value = false
+    await scrollToBottom()
+  }
 }
 
 async function submit() {
@@ -37,7 +66,7 @@ async function submit() {
 
   try {
     const history = messages.value.slice(0, -1).map(({ role, content }) => ({ role, content }))
-    const response = await sendChatMessage({ message: text, history, sessionId })
+    const response = await sendChatMessage({ message: text, history, sessionId: sessionId.value })
     messages.value.push({
       role: 'bot',
       content: response?.data?.message || '앗, 답변을 가져오지 못했어요. 잠시 후 다시 시도해 주세요 🙏'
@@ -68,9 +97,54 @@ function renderMessage(content) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 
-  return escaped
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>')
+  const renderInline = (text) => text.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+  const lines = escaped.split(/\r?\n/)
+  const blocks = []
+  let paragraph = []
+  let listItems = []
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return
+    blocks.push(`<p>${renderInline(paragraph.join(' '))}</p>`)
+    paragraph = []
+  }
+
+  const flushList = () => {
+    if (listItems.length === 0) return
+    blocks.push(`<ul>${listItems.map((item) => `<li>${renderInline(item)}</li>`).join('')}</ul>`)
+    listItems = []
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) {
+      flushParagraph()
+      flushList()
+      continue
+    }
+
+    const heading = line.match(/^#{2,4}\s+(.+)$/)
+    if (heading) {
+      flushParagraph()
+      flushList()
+      blocks.push(`<h3>${renderInline(heading[1])}</h3>`)
+      continue
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/)
+    if (bullet) {
+      flushParagraph()
+      listItems.push(bullet[1])
+      continue
+    }
+
+    flushList()
+    paragraph.push(line)
+  }
+
+  flushParagraph()
+  flushList()
+  return blocks.join('')
 }
 </script>
 
@@ -78,9 +152,14 @@ function renderMessage(content) {
   <main class="chatbot-page">
     <section class="chatbot-shell" aria-label="맞춤 동네 추천 챗봇">
       <header class="chatbot-header">
-        <p class="chatbot-eyebrow">AI 동네 추천</p>
+        <div class="chatbot-header-top">
+          <p class="chatbot-eyebrow">AI 동네 추천</p>
+          <button class="chatbot-reset" type="button" :disabled="loading || resetting" @click="startNewChat">
+            새 대화
+          </button>
+        </div>
         <h1>편하게 말하면 맞춤 동네를 찾아드릴게요 🏡</h1>
-        <p class="chatbot-subtitle">위치, 예산, 생활 우선순위를 대화로 알려주세요.</p>
+        <p class="chatbot-subtitle">이전 조건을 이어서 사용 중입니다. 처음부터 다시 시작하려면 새 대화를 눌러주세요.</p>
       </header>
 
       <div ref="listRef" class="chatbot-messages">
@@ -146,10 +225,43 @@ function renderMessage(content) {
 }
 
 .chatbot-eyebrow {
-  margin: 0 0 6px;
+  margin: 0;
   color: #079455;
   font-size: 15px;
   font-weight: 700;
+}
+
+.chatbot-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.chatbot-reset {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #b7ddca;
+  border-radius: 8px;
+  color: #067647;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.chatbot-reset:hover:not(:disabled) {
+  border-color: #079455;
+  background: #ecfdf3;
+}
+
+.chatbot-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .chatbot-header h1 {
@@ -208,12 +320,52 @@ function renderMessage(content) {
 
 .chatbot-bubble {
   max-width: min(72%, 620px);
-  padding: 13px 15px;
+  padding: 15px 16px;
   border-radius: 8px;
-  line-height: 1.68;
+  line-height: 1.72;
   font-size: 15px;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+
+.chatbot-bubble :deep(p) {
+  margin: 0 0 12px;
+}
+
+.chatbot-bubble :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.chatbot-bubble :deep(h3) {
+  margin: 4px 0 9px;
+  color: #0f172a;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 850;
+}
+
+.chatbot-bubble :deep(ul) {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.chatbot-bubble :deep(li) {
+  position: relative;
+  padding-left: 17px;
+}
+
+.chatbot-bubble :deep(li::before) {
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  content: '';
 }
 
 .chatbot-bubble :deep(strong) {
@@ -223,6 +375,15 @@ function renderMessage(content) {
 
 .is-user .chatbot-bubble :deep(strong) {
   color: #ffffff;
+}
+
+.is-user .chatbot-bubble :deep(h3),
+.is-user .chatbot-bubble :deep(p) {
+  color: #ffffff;
+}
+
+.is-user .chatbot-bubble :deep(li::before) {
+  background: #ffffff;
 }
 
 .is-user .chatbot-bubble {
