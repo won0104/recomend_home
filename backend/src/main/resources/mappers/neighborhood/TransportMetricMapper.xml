@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.prj.model.mapper.neighborhood.TransportMetricMapper">
+
+    <select id="countBusStopsByDongCodes"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodBusStopCount">
+        SELECT
+            d.dong_code AS dongCode,
+            COALESCE(m.bus_stop_count, 0) AS busStopCount
+        FROM dongcodes d
+        LEFT JOIN dong_bus_stop_metrics m
+            ON m.dong_code = d.dong_code
+        WHERE d.dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+        ORDER BY d.dong_code
+    </select>
+
+    <select id="countAllSeoulBusStops"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodBusStopCount">
+        SELECT
+            d.dong_code AS dongCode,
+            COALESCE(m.bus_stop_count, 0) AS busStopCount
+        FROM dongcodes d
+        LEFT JOIN dong_bus_stop_metrics m
+            ON m.dong_code = d.dong_code
+        WHERE LEFT(d.dong_code, 2) = '11'
+          AND d.dong_name IS NOT NULL
+        ORDER BY d.dong_code
+    </select>
+
+    <select id="countSubwaysByDongCodes"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodSubwayCount">
+        SELECT
+            d.dong_code AS dongCode,
+            COUNT(DISTINCT s.station_name) AS stationCount,
+            COUNT(DISTINCT s.line_name) AS lineCount,
+            COUNT(DISTINCT s.station_name) * 2
+                + GREATEST(COUNT(DISTINCT s.line_name) - COUNT(DISTINCT s.station_name), 0)
+                AS subwayIndex
+        FROM dongcodes d
+        LEFT JOIN subway_stations s
+            ON s.dong_code = d.dong_code
+        WHERE d.dong_code IN
+        <foreach collection="dongCodes" item="dongCode" open="(" separator="," close=")">
+            #{dongCode}
+        </foreach>
+        GROUP BY d.dong_code
+        ORDER BY d.dong_code
+    </select>
+
+    <select id="countAllSeoulSubways"
+            resultType="com.ssafy.prj.model.dto.neighborhood.NeighborhoodSubwayCount">
+        SELECT
+            d.dong_code AS dongCode,
+            COUNT(DISTINCT s.station_name) AS stationCount,
+            COUNT(DISTINCT s.line_name) AS lineCount,
+            COUNT(DISTINCT s.station_name) * 2
+                + GREATEST(COUNT(DISTINCT s.line_name) - COUNT(DISTINCT s.station_name), 0)
+                AS subwayIndex
+        FROM dongcodes d
+        LEFT JOIN subway_stations s
+            ON s.dong_code = d.dong_code
+        WHERE LEFT(d.dong_code, 2) = '11'
+          AND d.dong_name IS NOT NULL
+        GROUP BY d.dong_code
+        ORDER BY d.dong_code
+    </select>
+</mapper>
