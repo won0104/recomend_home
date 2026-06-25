@@ -172,6 +172,23 @@ function scoreLevel(score) {
   return 'low'
 }
 
+/**
+ * 백엔드가 내려주는 카테고리 점수는 0~100점 범위이므로,
+ * 프론트에서는 이 값을 사용자가 이해하기 쉬운 "상위 비율" 문장으로 바꿔 보여준다.
+ *
+ * 예) 95점 → 서울시 기준 상위 약 5%
+ * 예) 68점 → 서울시 기준 상위 약 32%
+ *
+ * 실제 DB 순위를 다시 계산하는 값은 아니기 때문에 "약"이라는 표현을 붙인다.
+ * 정확한 n위가 필요해지면 백엔드에서 카테고리별 전체 순위를 계산해 내려주는 방식으로 확장하면 된다.
+ */
+function scoreTopPercent(score) {
+  const normalizedScore = Number(score ?? 0)
+  if (normalizedScore <= 0) return null
+
+  return Math.max(1, Math.min(100, Math.round(100 - normalizedScore)))
+}
+
 const strengthLabel = {
   PARK: '공원 접근 우수', CAFE: '카페·외식 밀집', SCHOOL: '학교 인접',
   SHOPPING: '생활편의 풍부', MEDICAL: '의료 인프라', CULTURE: '문화시설 우수', PET: '반려인 환경',
@@ -594,6 +611,12 @@ onMounted(() => {
                     ></div>
                   </div>
                   <p class="nr-detail-score-item__desc">
+                    서울시 기준 상위
+                    <strong v-if="scoreTopPercent(cs.score)" class="nr-detail-score-item__percent">
+                      {{ scoreTopPercent(cs.score) }}%
+                    </strong>
+                    <span v-else class="nr-detail-score-item__percent">비교 데이터 부족</span>
+                    :
                     {{ categoryDesc[cs.category]?.[scoreLevel(cs.score)] }}
                   </p>
                 </li>
