@@ -43,6 +43,12 @@ public class PropertyApiController {
                         dealAmountMin, dealAmountMax, depositMin, depositMax, monthlyRentMin, monthlyRentMax))));
     }
 
+    @GetMapping("/summary/total")
+    @Operation(summary = "DB 전체 거래 건수 요약", description = "필터 없이 DB에 적재된 전체 매매·전월세 건수와 평균 매매가를 반환합니다. 홈 화면 초기 통계 카드용입니다.")
+    public ResponseEntity<?> totalSummary() throws Exception {
+        return ResponseEntity.ok(ApiResponse.ok("전체 거래 통계입니다.", realEstateService.summarizeAll()));
+    }
+
     @GetMapping("/summary")
     @Operation(summary = "매매·전월세 실거래 요약", description = "공개 API입니다. 검색과 같은 거래·보증금·월세 조건으로 전체·매매·전월세 건수를 집계하고, 평균 매매가는 매매만 대상으로 반환합니다.")
     public ResponseEntity<?> summary(@Parameter(description = "주택 유형", example = "APT") @RequestParam(required = false) String housingType,

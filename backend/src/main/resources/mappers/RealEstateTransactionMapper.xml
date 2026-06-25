@@ -265,4 +265,15 @@
         ) tx
         <include refid="transactionFilters" />
     </select>
+
+    <!-- 필터 없이 DB 전체 건수만 집계한다. 각 테이블을 COUNT(*) 한 번씩만 읽으므로 빠르다. -->
+    <select id="summarizeAll" resultType="TransactionSummary">
+        SELECT
+            (SELECT COUNT(*) FROM housedeals) +
+            (SELECT COUNT(*) FROM houserents)                                                         AS total_count,
+            (SELECT COUNT(*) FROM housedeals)                                                         AS deal_count,
+            (SELECT COUNT(*) FROM houserents)                                                         AS rent_count,
+            (SELECT COALESCE(ROUND(AVG(CAST(REPLACE(deal_amount, ',', '') AS UNSIGNED))), 0)
+             FROM housedeals WHERE deal_amount IS NOT NULL AND deal_amount != '')                      AS avg_deal_amount
+    </select>
 </mapper>

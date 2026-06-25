@@ -100,12 +100,10 @@ async function runSearch() {
   }
 }
 
-// 상단 카드만 단독으로 갱신해야 하는 화면에서 사용하는 보조 함수다.
-// 현재 홈 화면은 최초 진입 때 runSearch()를 호출하므로, 일반적인 첫 화면 흐름에서는
-// 목록·지도·상단 통계를 한 번에 갱신한다.
+// DB 전체 건수를 필터 없이 빠르게 가져온다. 각 테이블 COUNT(*)만 실행하므로 즉시 응답된다.
 async function loadInitialSummary() {
   try {
-    const response = await api.get('/properties/summary')
+    const response = await api.get('/properties/summary/total')
     stats.value = response.data.data || stats.value
   } catch {
     // 통계 조회가 실패해도 화면 검색 기능은 계속 사용할 수 있게 기본 0값을 유지한다.
@@ -183,15 +181,9 @@ function resetFilters() {
 }
 
 onMounted(async () => {
-  // 1. 기본 지역(서울특별시 → 종로구)을 먼저 정한다.
-  //    loadSidoOptions() 내부에서 기본 법정동 코드도 설정하므로, 이를 기다리지 않고
-  //    검색하면 지역 코드가 비어 있는 전체 검색이 실행될 수 있다.
-  await loadSidoOptions()
-
-  // 2. 지역 기본값이 준비된 뒤 관심지역과 실제 거래 검색을 동시에 시작한다.
-  //    runSearch()는 /properties/search(목록·지도)와 /properties/summary(상단 카드)를
-  //    함께 호출하므로, 새로고침 직후에도 종로구의 매매·전월세 데이터가 화면에 표시된다.
-  await Promise.all([loadFavorites(), runSearch()])
+  // 지역 드롭다운 초기화와 전체 통계 카드를 병렬로 로드한다.
+  // 통계 카드는 DB 전체 건수를 단순 COUNT로 가져오므로 검색보다 훨씬 빠르게 표시된다.
+  await Promise.all([loadSidoOptions(), loadFavorites(), loadInitialSummary()])
 })
 </script>
 

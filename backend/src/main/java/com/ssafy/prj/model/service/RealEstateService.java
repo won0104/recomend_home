@@ -11,4 +11,6 @@ public interface RealEstateService {
     List<RealEstateTransaction> search(SearchCondition condition) throws Exception;
 
     TransactionSummary summarize(SearchCondition condition) throws Exception;
+
+    TransactionSummary summarizeAll() throws Exception;
 }
