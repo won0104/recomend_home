@@ -1,96 +1,89 @@
-# SSAFY HOME - JSP to Vue SPA Migration
+# 🏠 구해즈 홈줘
 
-기존 JSP 기반 화면 렌더링 구조를 Vue SPA 프론트엔드와 Spring REST API 백엔드로 분리한 프로젝트입니다.
+## 🧰 기술 스택
 
-이번 구현의 핵심은 기존 Spring MVC + JSP 화면을 유지하던 구조에서, 화면은 Vue가 담당하고 백엔드는 JSON API만 제공하는 구조로 전환한 것입니다. 인증은 기존 프로젝트의 방향을 유지해 Spring Security 세션 방식으로 처리했습니다.
+| 영역 | 기술 |
+| --- | --- |
+| Frontend | Vue 3, Vue Router 4, Vite 7, Axios |
+| Backend | Java 21, Spring Boot 3.5.x, Spring MVC REST API |
+| Security | Spring Security, JWT Access/Refresh Token, JJWT |
+| Database | MySQL 8.x, HikariCP, MyBatis XML Mapper |
+| Batch | Spring Batch, Spring Scheduling |
+| AI/RAG | Spring AI OpenAI, GPT API, OpenAI Embedding, RAG 문서 검색 |
+| Cache | Redis, Caffeine Cache |
+| Map/Geocoding | Kakao Map JavaScript SDK, Kakao Local API |
+| API 문서 | springdoc-openapi, Swagger UI |
+| Data Source | 공공데이터포털 실거래 API, 소상공인시장진흥공단 상권 API, 서울시 버스 정류장 API, 파일 기반 학교·공원·지하철 데이터 |
 
 <br>
 
-## 프로젝트 구조
+## 🧭 개발 구조
+
+### 🏗️ 전체 구조
 
 ```text
-pjt11_buk03_15_09
-├─ backend/                # Spring Boot REST API 서버
-│  ├─ batch/               # 부동산 실거래 데이터 수집/저장/요약/PDF 배치
-│  │  ├─ ai/               # AI 요약 서비스
-│  │  ├─ config/           # Spring Batch Job/Step 설정
-│  │  ├─ dao/              # 배치 데이터 접근 계층
-│  │  ├─ domain/           # 배치 도메인 객체
-│  │  ├─ pdf/              # PDF 리포트 생성
-│  │  ├─ scheduler/        # 배치 스케줄 실행
-│  │  ├─ shared/           # 배치 공통 객체
-│  │  └─ tasklet/          # 수집/저장/요약/PDF Tasklet
-│  ├─ config/              # Swagger, 애플리케이션 설정
-│  ├─ controller/          # API 컨트롤러와 공통 예외 처리
-│  │  ├─ advice/           # REST API 예외 응답 처리
-│  │  └─ api/              # Vue에서 호출하는 REST API 엔드포인트
-│  ├─ filter/              # 요청 로깅 등 Servlet Filter
-│  ├─ model/
-│  │  ├─ dto/              # 요청/응답 및 도메인 데이터 객체
-│  │  ├─ mapper/           # MyBatis Mapper 인터페이스
-│  │  └─ service/          # 비즈니스 로직
-│  ├─ security/            # Spring Security 세션 인증/인가
-│  ├─ util/                # 공통 유틸리티
-│  └─ resources/
-│     └─ mappers/          # MyBatis XML SQL Mapper
-├─ frontend/               # Vue SPA 클라이언트
-│  └─ src/
-│     ├─ api/              # Axios 기반 REST API 호출 모듈
-│     ├─ components/       # 헤더, 푸터, 지도, 목록 등 재사용 UI
-│     ├─ views/            # 라우터에 연결되는 페이지 단위 화면
-│     ├─ router/           # Vue Router 경로 설정
-│     ├─ utils/            # 날짜 포맷, Kakao SDK 로더 등 공통 유틸
-│     ├─ App.vue           # 공통 레이아웃
-│     └─ main.js           # Vue 앱 진입점
+사용자
+→ Vue SPA
+→ Axios REST API 호출
+→ Spring Boot API
+→ Service / Score Calculator / Batch / RAG
+→ MyBatis Mapper
+→ MySQL
 ```
 
-<br>
+프론트엔드는 Vue SPA로 화면 전환을 담당하고, 백엔드는 `/api/**` REST API로 JSON 데이터를 제공합니다.
+주요 기능은 실거래 검색, 조건 기반 동네 추천, 관심지역, 게시판, 공지사항, AI 챗봇/동네 요약으로 나뉩니다.
 
-## 기술 스택
-
-| 영역     | 기술                                            |
-| -------- | ----------------------------------------------- |
-| Frontend | Vue 3, Vue Router, Vite, Axios, pnpm            |
-| Backend  | Java 21, Spring Boot 3.5.x, Spring MVC REST API |
-| Security | Spring Security, Session, JSESSIONID Cookie     |
-| Database | MySQL 8.x, MyBatis XML Mapper                   |
-| Map      | Kakao Map JavaScript SDK                        |
-| API 문서 | springdoc-openapi / Swagger UI                  |
-| Data     | 공공데이터 기반 주택/상권 데이터                |
-
-<br>
-
-## 전환 전후 구조
-
-### 기존 JSP 구조
+### ☕ 백엔드 패키지 구조
 
 ```text
-브라우저
-→ Spring Controller
-→ JSP View 반환
-→ 서버가 HTML 렌더링
-→ 브라우저에 완성된 HTML 응답
+backend/src/main/java/com/ssafy/prj
+├─ controller/api        # REST API 컨트롤러
+├─ model
+│  ├─ dto                # API 응답/요청 DTO
+│  ├─ mapper             # MyBatis Mapper 인터페이스
+│  └─ service            # 도메인 서비스
+│     └─ neighborhood    # 동네 추천 서비스와 점수 계산기
+├─ batch                 # 실거래·상권·버스 데이터 수집 배치
+├─ chat                  # Spring AI 챗봇, RAG 검색, 추천 설명 함수
+├─ security              # Spring Security, JWT 인증/인가
+├─ filter                # 공통 필터
+├─ config                # Cache, CORS, Transaction 등 설정
+└─ util                  # 공통 유틸
 ```
 
-기존에는 `AuthController`, `BoardController`, `NoticeController`, `HouseInfoController` 같은 컨트롤러가 JSP view name을 반환했습니다.
-
-### 현재 Vue SPA + REST API 구조
+### 🎨 프론트엔드 구조
 
 ```text
-브라우저
-→ Vue SPA 라우터가 화면 전환
-→ Axios로 Spring REST API 호출
-→ Spring은 JSON 응답
-→ Vue가 응답 데이터를 화면에 렌더링
+frontend/src
+├─ api          # Axios 기반 API 호출 함수
+├─ views        # 페이지 단위 Vue 컴포넌트
+├─ components   # 공통 UI와 동네 추천 단계별 컴포넌트
+├─ router       # Vue Router 설정
+├─ assets       # 이미지·정적 리소스
+└─ utils        # 포맷팅 등 공통 함수
 ```
 
-현재 백엔드는 JSP 화면을 반환하지 않고 `/api/**` 경로의 REST API를 제공합니다. 프론트엔드는 `frontend/src/views`의 페이지와 `frontend/src/components`의 재사용 UI 컴포넌트로 구성됩니다.
+### 🏘️ 동네 추천 처리 흐름
+
+```text
+기준 위치 입력
+→ 반경·거래 유형·예산 선택
+→ 생활 우선순위 3개 선택
+→ 후보 법정동 조회
+→ 카테고리별 점수 계산
+→ 상위 3개 추천
+→ 상세 화면에서 매물 목록 + AI/RAG 요약 확인
+```
+
+점수 계산에는 학교, 공원, 상권, 의료, 반려, 교통 지표가 사용됩니다.
+상권·버스·실거래 데이터는 배치로 갱신하고, 학교·공원·지하철 데이터는 파일 기반으로 적재합니다.
 
 <br>
 
-## 구현 기능
+## ✨ 주요 기능
 
-### F1102. 부동산 주택 실거래가 검색
+### 🔎 주택 실거래가 검색
 
 구현 내용:
 
@@ -107,22 +100,16 @@ pjt11_buk03_15_09
 - `frontend/src/api/houses.js`
 - `frontend/src/api/regions.js`
 
-구현 화면:
-
-<img src="./images/screens/home.png" alt="F1102 주택 실거래가 검색 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/search_result_table.png" alt="F1102 주택 실거래가 검색 결과" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/search_result_map.png" alt="F1102 주택 실거래가 지도 결과" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1103. 부동산 관심 지역 정보 관리
+### ⭐ 관심 지역 관리
 
 구현 내용:
 
 - 기존 JSP 마이페이지의 관심지역 영역을 Vue 화면으로 이전
 - 로그인한 사용자의 관심지역 목록 조회
 - 관심지역 삭제 기능을 REST API로 연결
-- 세션 로그인 상태를 기준으로 사용자별 관심지역만 표시
+- JWT 로그인 상태를 기준으로 사용자별 관심지역만 표시
 
 관련 화면 및 코드:
 
@@ -130,59 +117,46 @@ pjt11_buk03_15_09
 - `frontend/src/api/favorites.js`
 - `backend/src/main/java/com/ssafy/prj/controller/api/FavoriteApiController.java`
 
-구현 화면:
-
-<img src="./images/screens/favorite_add.png" alt="F1103 관심지역 등록 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/favorite_list.png" alt="F1103 관심지역 목록 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1104. 부동산 주변탐방 정보 수집
+### 📦 동네 추천용 생활 인프라 데이터 수집
 
 구현 내용:
 
-- 공공데이터포털의 소상공인시장진흥공단 상가(상권)정보 CSV 활용
-- 원본 약 272만 행 데이터를 1/100 경량 샘플로 변환
-- 17개 시도별 샘플 CSV를 `data/summary/commercials_<region>.csv` 형태로 생성
-- `commercials`, `commercial_categories` 테이블에 상권 데이터 적재
-- MySQL `local_infile` 권한 문제를 피하기 위해 Java batch insert 로더 추가
+- 동네 추천 점수 계산에 필요한 생활 인프라 데이터를 법정동 단위로 집계
+- 상권 원본 점포 전체를 저장하지 않고 `dong_commercial_metrics`에 카테고리별 업소 수만 저장
+- 카페·외식, 운동·문화, 장보기·생활편의, 의료, 반려용품, 동물병원 데이터를 공공데이터 API 배치로 수집
+- 버스 정류장은 서울시 API와 좌표→법정동 변환 캐시를 활용해 법정동별 정류장 수로 집계
+- 학교·공원·지하철은 정적 시설 데이터로 보고 파일 기반으로 적재
 
 관련 파일:
 
-- `scripts/sample_commercials.py`
-- `scripts/LoadCommercialSummary.java`
-- `sql/load_commercials_summary.sql`
-
-구현 화면:
-
-<img src="./images/screens/commercial_search.png" alt="F1104 상권 경량 샘플 생성 및 검색 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/search_filter_card.png" alt="F1104 상권 검색 필터 화면" style="max-width:600px; max-height:400px;" />
+- `backend/src/main/java/com/ssafy/prj/batch/commercial/CommercialMetricsCollectTasklet.java`
+- `backend/src/main/java/com/ssafy/prj/batch/bus/BusStopMetricsCollectTasklet.java`
+- `sql/dong_commercial_metrics.sql`
+- `sql/dong_bus_stop_metrics.sql`
 
 <br>
 
-### F1105. 부동산 주변탐방 업종 정보 검색
+### 🧩 조건 기반 동네 추천
 
 구현 내용:
 
-- 기존 JSP 상권 검색 UI를 Vue 메인 화면으로 이전
-- 업종 대분류/중분류 목록을 REST API로 조회
-- 시군구 코드, 업종, 키워드 조건으로 주변 상권 검색
-- 2026년 상권 데이터의 업종 코드 체계에 맞춰 Vue 검색 조건 연결
+- 기준 위치와 최대 반경으로 후보 법정동을 찾음
+- 거래 유형과 예산 조건으로 실제 매물이 있는 동네를 필터링
+- 사용자가 선택한 생활 우선순위 3개를 기준으로 학교·공원·상권·의료·반려·교통 점수를 계산
+- 추천 결과에서 서울시 기준 상위 비율과 AI/RAG 기반 동네 요약을 제공
+- 추천 동네 상세 화면에서 조건에 맞는 실제 매물 목록을 함께 확인
 
 관련 화면 및 코드:
 
-- `frontend/src/views/HomeView.vue`
-- `frontend/src/api/commercials.js`
-- `backend/src/main/java/com/ssafy/prj/controller/api/CommercialApiController.java`
-
-구현 화면:
-
-<img src="./images/screens/commercial_search.png" alt="F1105 주변 상권 검색 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/search_filter_card.png" alt="F1105 주변 상권 검색 필터 화면" style="max-width:600px; max-height:400px;" />
+- `frontend/src/views/NeighborhoodRecommendView.vue`
+- `backend/src/main/java/com/ssafy/prj/controller/api/neighborhood/NeighborhoodRecommendApiController.java`
+- `backend/src/main/java/com/ssafy/prj/model/service/neighborhood/NeighborhoodRecommendServiceImpl.java`
 
 <br>
 
-### F1111. 커뮤니티 공지사항 관리
+### 📢 공지사항 관리
 
 구현 내용:
 
@@ -199,14 +173,9 @@ pjt11_buk03_15_09
 - `frontend/src/views/NoticeFormView.vue`
 - `frontend/src/api/notices.js`
 
-구현 화면:
-
-<img src="./images/screens/notice_list.png" alt="F1111 공지사항 목록 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/notice_detail.png" alt="F1111 공지사항 상세 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1112. 회원 등록
+### 🐣 회원가입
 
 구현 내용:
 
@@ -221,20 +190,16 @@ pjt11_buk03_15_09
 - `frontend/src/api/auth.js`
 - `backend/src/main/java/com/ssafy/prj/controller/api/MemberApiController.java`
 
-구현 화면:
-
-<img src="./images/screens/register_form.png" alt="F1112 회원 등록 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1113. 회원 조회
+### 👤 회원 정보 조회
 
 구현 내용:
 
 - 기존 JSP 마이페이지와 관리자 회원 목록 화면을 Vue로 이전
 - 로그인한 사용자의 회원 정보 조회
 - 관리자 권한으로 전체 회원 목록 조회
-- 세션 쿠키 기반으로 현재 사용자 정보를 유지
+- Access Token과 Refresh Token 기반으로 현재 사용자 정보를 유지
 
 관련 화면 및 코드:
 
@@ -243,14 +208,9 @@ pjt11_buk03_15_09
 - `frontend/src/api/auth.js`
 - `frontend/src/api/admin.js`
 
-구현 화면:
-
-<img src="./images/screens/mypage.png" alt="F1113 회원 정보 조회 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/admin_user_management.png" alt="F1113 관리자 회원 목록 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1114. 회원 수정
+### ✏️ 회원 정보 수정
 
 구현 내용:
 
@@ -265,21 +225,16 @@ pjt11_buk03_15_09
 - `frontend/src/api/auth.js`
 - `backend/src/main/java/com/ssafy/prj/controller/api/MemberApiController.java`
 
-구현 화면:
-
-<img src="./images/screens/mypage_edit_info.png" alt="F1114 회원 정보 수정 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/mypage_change_password.png" alt="F1114 비밀번호 변경 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1115. 회원 삭제
+### 🗑️ 회원 삭제
 
 구현 내용:
 
 - 마이페이지에서 회원 탈퇴 기능을 Vue 화면으로 이전
 - 관리자 화면에서 회원 삭제 기능 제공
 - 삭제 전 확인 모달을 표시해 실수 삭제 방지
-- 삭제 후 세션 상태와 화면 목록 갱신
+- 삭제 후 로그인 상태와 화면 목록 갱신
 
 관련 화면 및 코드:
 
@@ -288,22 +243,19 @@ pjt11_buk03_15_09
 - `frontend/src/components/ConfirmModal.vue`
 - `frontend/src/api/admin.js`
 
-구현 화면:
-
-<img src="./images/screens/admin_user_management.png" alt="F1115 관리자 회원 삭제 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/mypage.png" alt="F1115 회원 탈퇴 전 마이페이지 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1116. 회원 로그인 관리
+### 🔐 로그인과 인증
 
 구현 내용:
 
 - 기존 JSP 로그인/로그아웃 화면과 처리를 Vue + REST API 방식으로 이전
 - `POST /api/auth/login`으로 JSON 로그인 요청
-- Spring Security 인증 성공 시 서버 세션에 `SecurityContext` 저장
-- 브라우저는 `JSESSIONID` 쿠키로 로그인 상태 유지
-- `POST /api/auth/logout`으로 세션 무효화
+- Spring Security 인증 성공 시 JWT Access Token과 Refresh Token 발급
+- 프론트엔드는 Access Token을 `Authorization: Bearer ...` 헤더에 담아 보호 API 호출
+- Refresh Token은 HttpOnly 쿠키로 내려 로그인 연장 요청(`/api/auth/refresh`)에 사용
+- `GET /api/auth/me`로 현재 로그인 사용자 정보를 조회
+- `POST /api/auth/logout`으로 보안 컨텍스트를 비우고 Refresh Token 쿠키 만료
 - 인증 실패와 권한 없음 응답은 HTML redirect가 아닌 JSON으로 반환
 
 관련 화면 및 코드:
@@ -312,15 +264,12 @@ pjt11_buk03_15_09
 - `frontend/src/api/auth.js`
 - `backend/src/main/java/com/ssafy/prj/controller/api/AuthApiController.java`
 - `backend/src/main/java/com/ssafy/prj/security/config/CustomSecurityConfig.java`
-
-구현 화면:
-
-<img src="./images/screens/login_form.png" alt="F1116 로그인 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/mypage.png" alt="F1116 로그아웃 후 화면" style="max-width:600px; max-height:400px;" />
+- `backend/src/main/java/com/ssafy/prj/security/jwt/JwtTokenProvider.java`
+- `backend/src/main/java/com/ssafy/prj/security/jwt/JwtAuthenticationFilter.java`
 
 <br>
 
-### F1120. 기타 주택 정보 관리
+### 🏢 주택 정보 관리
 
 구현 내용:
 
@@ -338,16 +287,9 @@ pjt11_buk03_15_09
 - `frontend/src/components/KakaoMap.vue`
 - `frontend/src/api/houses.js`
 
-구현 화면:
-
-<img src="./images/screens/houseinfo_list.png" alt="F1120 주택 정보 목록 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/houseinfo_detail.png" alt="F1120 주택 정보 상세 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/houseinfo_detail_deals.png" alt="F1120 주택 최근 거래 내역 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/houseinfo_edit.png" alt="F1120 주택 정보 수정 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-### F1121. 기타 공유게시판
+### 💬 공유게시판
 
 구현 내용:
 
@@ -367,18 +309,11 @@ pjt11_buk03_15_09
 - `frontend/src/components/ArticleForm.vue`
 - `frontend/src/api/boards.js`
 
-구현 화면:
-
-<img src="./images/screens/board_list.png" alt="F1121 공유게시판 목록 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/board_detail.png" alt="F1121 공유게시판 상세 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/board_form.png" alt="F1121 공유게시판 등록 화면" style="max-width:600px; max-height:400px;" />
-<img src="./images/screens/board_edit_delete.png" alt="F1121 공유게시판 수정 및 삭제 화면" style="max-width:600px; max-height:400px;" />
-
 <br>
 
-## 실행 방법
+## 🚀 실행 방법
 
-### 사전 요구사항
+### ✅ 사전 요구사항
 
 | 항목 | 버전 | 비고 |
 |------|------|------|
@@ -397,7 +332,7 @@ docker run -d --name redis -p 6379:6379 redis:7
 
 <br>
 
-### 1. 환경 변수 설정
+### 1. 🔑 환경 변수 설정
 
 `backend/application-secret.properties` 파일을 생성하고 아래 값을 채웁니다.
 
@@ -419,7 +354,7 @@ JWT_SECRET=여기에_64자_이상의_랜덤_문자열_입력
 
 <br>
 
-### 2. DB 스키마 및 기본 데이터 적재
+### 2. 🗄️ DB 스키마 및 기본 데이터 적재
 
 MySQL에 `ssafy_home` 데이터베이스를 먼저 생성합니다.
 
@@ -435,8 +370,9 @@ GRANT ALL PRIVILEGES ON ssafy_home.* TO 'ssafy_home'@'localhost';
 # ① 전체 테이블 스키마 생성
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\SSAFY_HOME_Schema.sql
 
-# ② 법정동 코드 + 주택정보(houseinfos) + 매매 실거래(housedeals) 기본 데이터
-mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\SSAFY_HOME_Dump_2604.sql
+# ② 법정동 코드
+# load_dongcodes.sql 또는 dongcodes_from_dump.sql 중 하나만 실행합니다.
+mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\load_dongcodes.sql
 
 # ③ 전월세 실거래 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\houserents.sql
@@ -450,121 +386,260 @@ mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\notices.
 # ⑥ 자유게시판 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\boards.sql
 
-# ⑦ 상권 테이블 (스키마만, 데이터는 3단계에서 적재)
-mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\commercials.sql
-
-# ⑧ 동네 추천용 - 공원 테이블
+# ⑦ 동네 추천용 - 공원 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\parks.sql
 
-# ⑨ 동네 추천용 - 학교 테이블
+# ⑧ 동네 추천용 - 학교 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\schools.sql
 
-# ⑩ 동네 추천용 - 지하철역 테이블
+# ⑨ 동네 추천용 - 지하철역 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\subway_stations.sql
 
-# ⑪ 동네 추천용 - 상권 집계 테이블
+# ⑩ 동네 추천용 - 상권 집계 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\dong_commercial_metrics.sql
 
-# ⑫ 동네 추천용 - 버스 정류소 집계 테이블
+# ⑪ 동네 추천용 - 버스 정류소 집계 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\dong_bus_stop_metrics.sql
 
-# ⑬ 배치 리포트 테이블 (배치 기능 사용 시)
+# ⑫ 매매 실거래 배치 리포트 테이블
 mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\batch_estate_market.sql
 ```
+
+> `SSAFY_HOME_Dump_2604.sql`은 원본 대용량 덤프입니다. 현재 프로젝트 실행 절차에서는 직접 실행하지 않고,
+> 필요한 법정동 데이터만 분리한 `load_dongcodes.sql` 또는 `dongcodes_from_dump.sql`를 사용합니다.
 
 각 테이블이 정상 생성되었는지 확인합니다.
 
 ```sql
 USE ssafy_home;
 SHOW TABLES;
--- 예상 결과: 16개 테이블
 ```
 
 <br>
 
-### 3. 동네 추천 인프라 데이터 적재
+### 3. 🏙️ 동네 추천 인프라 데이터 적재
 
-동네 추천 점수 계산에 필요한 공원·학교·지하철·상권 집계 데이터를 적재합니다.
+동네 추천 점수 계산에 필요한 데이터는 **파일 적재 데이터**와 **배치 수집 데이터**로 나뉩니다.
+
+#### 데이터 수집 방식 요약
+
+| 데이터 | 적재 방식 | 사용 테이블 |
+| --- | --- | --- |
+| 학교 | 파일 기반 CSV 변환 후 적재 | `schools` |
+| 공원 | 파일 기반 CSV 변환 후 적재 | `parks` |
+| 지하철 | 파일 기반 CSV 변환 후 적재 | `subway_stations` |
+| 상권·생활시설 | 공공데이터 API 배치 수집 | `dong_commercial_metrics` |
+| 버스 정류장 | 서울시 API 배치 수집 + 좌표→법정동 캐시 | `dong_bus_stop_metrics`, `bus_stop_dong_cache` |
+| 매매 실거래 | 공공데이터 API 배치 수집 | `houseinfos`, `housedeals`, 배치 리포트 테이블 |
+| 전월세 실거래 | 공공데이터 API 배치 수집 | `houserents` |
+
+파일이 필요한 데이터는 학교·공원·지하철 3종입니다. 나머지는 Spring Batch가 API를 호출해 수집합니다.
+
+#### 학교 데이터
+
+전국 학교 위치 표준데이터 CSV를 `schools` 적재용 CSV로 변환합니다.
+
+```powershell
+# 1차 주소 매칭
+powershell -ExecutionPolicy Bypass -File scripts\convert_national_schools_for_import.ps1
+
+# 주소만으로 법정동 코드가 확정되지 않은 학교를 카카오 역지오코딩으로 보정할 때만 실행
+powershell -ExecutionPolicy Bypass -File scripts\recover_national_school_dong_codes_with_kakao.ps1
+```
+
+변환된 CSV는 `sql/schools.sql`의 `LOAD DATA LOCAL INFILE` 경로와 맞춰 적재합니다.
+
+```powershell
+mysql -u ssafy_home -p --local-infile=1 --default-character-set=utf8mb4 ssafy_home < sql\schools.sql
+```
 
 #### 공원 데이터
 
+전국 도시공원 표준데이터 CSV를 `parks` 적재용 CSV로 변환합니다.
+
 ```powershell
-# parks_for_import.csv 가 data/ 폴더에 있어야 합니다
+python scripts\prepare_parks.py
 mysql -u ssafy_home -p --local-infile=1 --default-character-set=utf8mb4 ssafy_home < sql\load_parks.sql
-```
-
-#### 법정동 코드 (Dump에 포함되지 않은 경우)
-
-```powershell
-mysql -u ssafy_home -p --default-character-set=utf8mb4 ssafy_home < sql\load_dongcodes.sql
 ```
 
 #### 지하철역 데이터
 
-`scripts/prepare_subway_stations.py`를 실행하면 `subway_stations` 테이블에 데이터가 적재됩니다.
+전국 도시·광역철도 역사 파일을 서울 지하철 추천 점수용 CSV로 변환합니다.
 
 ```powershell
 python scripts\prepare_subway_stations.py
 ```
 
-#### 학교 데이터
+`prepare_subway_stations.py`는 변환 후 `subway_stations` 테이블에 데이터를 적재합니다.
 
-`scripts/prepare_schools.py` (또는 학교 CSV를 직접 INSERT) 실행 후 확인합니다.
+#### 적재 확인
 
 ```sql
-SELECT COUNT(*) FROM schools;       
+SELECT COUNT(*) FROM dongcodes;
+SELECT COUNT(*) FROM schools;
 SELECT COUNT(*) FROM parks;
 SELECT COUNT(*) FROM subway_stations;
 ```
 
 <br>
 
-### 4. 상권 데이터 적재
+### 4. 🔁 배치 데이터 수집
 
-공공데이터포털에서 `소상공인시장진흥공단 상가(상권)정보` 파일을 다운로드한 뒤 압축 해제합니다.
+상권·버스·실거래처럼 변동성이 큰 데이터는 파일을 직접 넣지 않고 Spring Batch로 수집합니다.
 
-```text
-data/소상공인시장진흥공단_상가(상권)정보_20260331/
+#### API 키 설정
+
+`backend/src/main/resources/application-secret.properties` 또는 환경변수에 API 키를 설정합니다.
+
+```properties
+# 공공데이터포털 실거래/상권 API
+ESTATE_API_KEY=발급받은_공공데이터포털_키
+COMMERCIAL_API_KEY=발급받은_상권_API_키
+
+# 서울시 버스 정류장 API
+SEOUL_OPEN_API_KEY=발급받은_서울시_OPEN_API_키
+
+# 좌표를 법정동으로 변환할 때 사용
+KAKAO_REST_API_KEY=발급받은_카카오_REST_API_키
+
+# AI/RAG 요약용 GPT API
+AI_API_KEY=발급받은_GPT_API_키
 ```
 
-1/100 경량 샘플 CSV를 생성합니다.
+#### 상권·생활시설 배치
+
+상권 원본 점포 전체를 저장하지 않고, 법정동별 통계만 `dong_commercial_metrics`에 저장합니다.
+
+수집 대상:
+
+- 카페·외식
+- 운동·문화
+- 장보기·생활편의
+- 의료
+- 반려용품
+- 동물병원
+
+#### 버스 정류장 배치
+
+서울시 버스 정류장 API에서 정류장 좌표를 가져오고, 카카오 API로 좌표를 법정동 코드로 변환합니다.
+한 번 변환한 좌표는 `bus_stop_dong_cache`에 저장해 다음 배치부터 재사용합니다.
+
+#### 실거래 배치
+
+매매와 전월세 실거래는 공공데이터 API를 통해 수집합니다. 서울시 전체 수집 시에는 배치 설정의 법정동 코드 범위를 비워두거나 서울시 시군구 코드 목록을 지정합니다.
+
+#### 배치 실행 방법
+
+배치는 `backend/src/main/resources/application.properties`의 설정값을 바꾼 뒤 백엔드를 실행하면 시작됩니다.
+처음 데이터를 넣을 때는 아래 순서대로 진행합니다.
+
+##### 1) 상권·생활시설 배치 첫 실행
+
+```properties
+# backend/src/main/resources/application.properties
+batch.commercial.enabled=true
+batch.commercial.run-on-startup=true
+```
+
+백엔드를 실행하면 소상공인시장진흥공단 API를 호출해 `dong_commercial_metrics`에 법정동별 통계를 저장합니다.
+
+실행이 끝난 뒤에는 반복 실행을 막기 위해 아래처럼 되돌립니다.
+
+```properties
+batch.commercial.enabled=true
+batch.commercial.run-on-startup=false
+```
+
+##### 2) 버스 정류장 배치 첫 실행
+
+```properties
+# backend/src/main/resources/application.properties
+batch.bus.enabled=true
+batch.bus.run-on-startup=true
+```
+
+백엔드를 실행하면 서울시 버스 정류장 API를 호출하고, 카카오 좌표→법정동 변환 결과를 캐시에 저장합니다.
+최초 실행은 좌표 변환이 포함되어 시간이 오래 걸릴 수 있습니다.
+
+실행이 끝난 뒤에는 아래처럼 되돌립니다.
+
+```properties
+batch.bus.enabled=true
+batch.bus.run-on-startup=false
+```
+
+##### 3) 전월세 실거래 배치 첫 실행
+
+```properties
+# backend/src/main/resources/application.properties
+batch.estate-rent.enabled=true
+batch.estate-rent.run-on-startup=true
+```
+
+수집 범위는 아래 설정으로 조정합니다.
+
+```properties
+# 특정 구만 수집할 때
+batch.estate-rent.lawd-codes=11110,11140
+
+# 서울시 전체 수집 예시: lawd-codes를 주석 처리하고 sido-name을 사용합니다.
+# batch.estate-rent.lawd-codes=
+# batch.estate-rent.sido-name=서울특별시
+```
+
+실행이 끝난 뒤에는 아래처럼 되돌립니다.
+
+```properties
+batch.estate-rent.enabled=true
+batch.estate-rent.run-on-startup=false
+```
+
+##### 4) 매매 실거래 배치
+
+매매 실거래 배치는 `batch.estate.enabled`와 스케줄러를 사용합니다.
+
+```properties
+# backend/src/main/resources/application.properties
+batch.estate.enabled=true
+```
+
+수집 범위는 아래 설정으로 조정합니다.
+
+```properties
+# 특정 구만 수집할 때
+batch.estate.lawd-codes=11110,11140
+
+# 서울시 전체 수집 예시: lawd-codes를 주석 처리하고 sido-name을 사용합니다.
+# batch.estate.lawd-codes=
+# batch.estate.sido-name=서울특별시
+```
+
+##### 5) 백엔드 실행으로 배치 시작
 
 ```powershell
-python scripts\sample_commercials.py
+cd backend
+.\mvnw.cmd spring-boot:run
 ```
 
-생성 결과:
+콘솔에 배치 시작/완료 로그가 출력됩니다. `run-on-startup=true` 상태로 계속 두면 서버를 다시 켤 때마다 같은 배치가 반복 실행될 수 있으므로,
+최초 적재나 재수집이 끝난 뒤에는 반드시 `false`로 되돌리는 것을 권장합니다.
 
-```text
-data/summary/commercials_seoul.csv
-data/summary/commercials_gyeonggi.csv
-...
-data/summary/commercials_jeju.csv
-```
-
-MySQL `local_infile`이 허용된 환경이면 SQL 스크립트로 적재합니다.
-
-```powershell
-mysql -u ssafy_home -p --local-infile=1 ssafy_home < sql\load_commercials_summary.sql
-```
-
-`local_infile` 권한이 없으면 Java 로더를 사용합니다.
-
-```powershell
-# mysql-connector-j 경로는 환경에 맞게 수정합니다
-javac -cp "C:\Users\<사용자>\.m2\repository\com\mysql\mysql-connector-j\9.7.0\mysql-connector-j-9.7.0.jar" -d out scripts\LoadCommercialSummary.java
-java  -cp "out;C:\Users\<사용자>\.m2\repository\com\mysql\mysql-connector-j\9.7.0\mysql-connector-j-9.7.0.jar" LoadCommercialSummary
-```
-
-적재 확인:
+#### 배치 결과 확인
 
 ```sql
-SELECT COUNT(*) FROM commercials;  -- 약 27,000건 (전체의 1/100 샘플)
+SELECT category, COUNT(*), SUM(business_count)
+FROM dong_commercial_metrics
+GROUP BY category;
+
+SELECT COUNT(*) FROM dong_bus_stop_metrics;
+SELECT COUNT(*) FROM bus_stop_dong_cache;
+SELECT COUNT(*) FROM housedeals;
+SELECT COUNT(*) FROM houserents;
 ```
 
 <br>
 
-### 5. 백엔드 실행
+### 5. ☕ 백엔드 실행
 
 ```powershell
 cd backend
@@ -578,7 +653,7 @@ cd backend
 
 <br>
 
-### 6. 프론트엔드 실행
+### 6. 🎨 프론트엔드 실행
 
 ```powershell
 cd frontend
@@ -592,7 +667,7 @@ pnpm dev
 
 <br>
 
-### 테이블별 역할 요약
+### 📚 테이블별 역할 요약
 
 | 테이블 | 설명 | 필수 여부 |
 |--------|------|-----------|
@@ -604,7 +679,6 @@ pnpm dev
 | `favorite_areas` | 관심 지역 | ✅ 필수 |
 | `boards` | 자유게시판 | ✅ 필수 |
 | `notices` | 공지사항 | ✅ 필수 |
-| `commercials` | 상권 정보 (1/100 샘플) | ✅ 필수 |
 | `parks` | 공원 정보 | 동네 추천 사용 시 필수 |
 | `schools` | 학교 위치 | 동네 추천 사용 시 필수 |
 | `subway_stations` | 지하철역 위치 | 동네 추천 사용 시 필수 |
@@ -615,17 +689,19 @@ pnpm dev
 
 <br>
 
-## 개발 시 주의사항
+## 🧷 개발 시 주의사항
 
-### 세션 인증
+### 🔐 JWT 인증
 
-Vue와 Spring Boot를 분리해서 실행하므로 프론트는 `localhost:5173`, 백엔드는 `localhost:8080`에서 동작합니다. 세션 쿠키를 주고받기 위해 다음 설정이 필요합니다.
+Vue와 Spring Boot를 분리해서 실행하므로 프론트는 `localhost:5173`, 백엔드는 `localhost:8080`에서 동작합니다.
+Access Token은 요청 헤더로 전달하고, Refresh Token은 HttpOnly 쿠키로 관리합니다.
 
 - 백엔드 CORS에서 `http://localhost:5173` 허용
-- Axios `withCredentials: true`
-- 로그인 후 `/api/auth/me`로 세션 유지 확인
+- Axios 요청에는 Access Token을 `Authorization: Bearer ...` 형태로 첨부
+- Refresh Token 쿠키를 주고받는 인증 API는 `withCredentials: true` 사용
+- 로그인 후 `/api/auth/me`로 현재 사용자 조회 확인
 
-### API 경로
+### 🛣️ API 경로
 
 프론트에서 호출하는 백엔드 API는 `/api` prefix를 사용합니다.
 
@@ -634,12 +710,12 @@ Vue와 Spring Boot를 분리해서 실행하므로 프론트는 `localhost:5173`
 /api/boards
 /api/notices
 /api/houses
-/api/commercials
+/api/neighborhood
 ```
 
 이는 Vue 화면 라우트(`/boards`, `/login`, `/houses`)와 백엔드 데이터 API(`/api/boards`, `/api/auth/login`, `/api/houses`)를 구분하기 위한 구조입니다.
 
-### Kakao Map
+### 🗺️ Kakao Map
 
 카카오 지도 SDK를 사용하려면 Kakao Developers의 JavaScript 키와 Web 플랫폼 도메인 등록이 필요합니다.
 
