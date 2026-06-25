@@ -511,7 +511,7 @@ onMounted(() => {
     <!-- ① 장소 검색 -->
     <template v-if="screen === 'search'">
       <section class="place-finder-hero">
-        <div class="place-finder-badge">맞춤 동네 추천 서비스</div>
+<!--        <div class="place-finder-badge">맞춤 동네 추천 서비스</div>-->
         <h1>나에게 딱 맞는<br /><span>완벽한 동네</span>를 찾아드립니다</h1>
         <p>출퇴근 거리, 예산, 생활 성향까지 고려한<br />맞춤형 동네 추천으로 당신의 새로운 보금자리를 찾아보세요.</p>
       </section>
