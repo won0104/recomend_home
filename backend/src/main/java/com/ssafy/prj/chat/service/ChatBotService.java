@@ -67,7 +67,7 @@ public class ChatBotService {
            - 전세: depositMax에 최대 보증금을 만원 단위로 넣어. 5억원은 50000.
            - 월세: depositMax와 monthlyRentMax를 모두 넣어. 예: 보증금 5000만원, 월세 100만원은 depositMax=5000, monthlyRentMax=100.
         5. 주거형태: 아파트, 원룸, 오피스텔 등.
-        6. 우선순위 3개: SCHOOL(학교), CAFE(카페/외식), CULTURE(운동/문화), SHOPPING(장보기/생활편의), PARK(공원/산책), MEDICAL(의료), PET(반려동물) 중 정확히 3개.
+        6. 우선순위 3개: SCHOOL(학교), CAFE(카페/외식), CULTURE(운동/문화), SHOPPING(장보기/생활편의), PARK(공원/산책), MEDICAL(의료), PET(반려동물), TRANSPORT(교통) 중 정확히 3개.
 
         [조건 질문 예시]
         - 📍 기준 위치는 어디로 볼까요? 예: 서울시청, 강남역, 삼성역
@@ -75,7 +75,7 @@ public class ChatBotService {
         - 🏠 거래 유형은 무엇으로 볼까요? 예: 매매, 전세, 월세
         - 💰 매매라면 최대 매매가, 전세라면 최대 보증금, 월세라면 보증금과 월세를 물어봐.
         - 🏡 어떤 주거 형태를 찾으세요? 예: 아파트, 원룸, 오피스텔
-        - ✨ 생활에서 중요한 것 3가지를 골라주세요: 학교, 카페/외식, 문화, 장보기, 공원, 의료, 반려동물
+        - ✨ 생활에서 중요한 것 3가지를 골라주세요: 학교, 카페/외식, 문화, 장보기, 공원, 의료, 반려동물, 교통
 
         [예산 질문 규칙]
         - 거래유형을 모르면 예산을 먼저 묻지 말고 거래유형부터 물어봐.
@@ -625,32 +625,37 @@ public class ChatBotService {
 
     private List<SurveyCategory> extractPriorities(String text) {
         String normalized = text.toLowerCase(Locale.ROOT);
-        List<SurveyCategory> priorities = new ArrayList<>();
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.SCHOOL, "학교", "교육", "school");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.CAFE, "카페", "외식", "음식", "cafe");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.CULTURE, "문화", "운동", "스포츠", "culture");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.SHOPPING, "장보기", "쇼핑", "마트", "편의", "shopping");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.PARK, "공원", "산책", "park");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.MEDICAL, "의료", "병원", "medical");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.PET, "반려", "동물", "펫", "pet");
-        addPriorityIfMentioned(priorities, normalized, SurveyCategory.TRANSPORT, "교통", "버스", "지하철", "역세권", "transport");
-        return priorities;
+        List<PriorityMention> mentions = new ArrayList<>();
+        addPriorityMention(mentions, normalized, SurveyCategory.SCHOOL, "학교", "교육", "school");
+        addPriorityMention(mentions, normalized, SurveyCategory.CAFE, "카페", "외식", "음식", "cafe");
+        addPriorityMention(mentions, normalized, SurveyCategory.CULTURE, "문화", "운동", "스포츠", "culture");
+        addPriorityMention(mentions, normalized, SurveyCategory.SHOPPING, "장보기", "쇼핑", "마트", "편의", "shopping");
+        addPriorityMention(mentions, normalized, SurveyCategory.PARK, "공원", "산책", "park");
+        addPriorityMention(mentions, normalized, SurveyCategory.MEDICAL, "의료", "병원", "medical");
+        addPriorityMention(mentions, normalized, SurveyCategory.PET, "반려", "동물", "펫", "pet");
+        addPriorityMention(mentions, normalized, SurveyCategory.TRANSPORT, "교통", "버스", "지하철", "역세권", "transport");
+
+        mentions.sort((left, right) -> Integer.compare(left.index(), right.index()));
+        return mentions.stream()
+            .map(PriorityMention::category)
+            .toList();
     }
 
-    private void addPriorityIfMentioned(
-        List<SurveyCategory> priorities,
+    private void addPriorityMention(
+        List<PriorityMention> mentions,
         String text,
         SurveyCategory category,
         String... keywords
     ) {
-        if (priorities.contains(category)) {
-            return;
-        }
+        int firstIndex = -1;
         for (String keyword : keywords) {
-            if (text.contains(keyword.toLowerCase(Locale.ROOT))) {
-                priorities.add(category);
-                return;
+            int index = text.indexOf(keyword.toLowerCase(Locale.ROOT));
+            if (index >= 0 && (firstIndex < 0 || index < firstIndex)) {
+                firstIndex = index;
             }
+        }
+        if (firstIndex >= 0) {
+            mentions.add(new PriorityMention(category, firstIndex));
         }
     }
 
@@ -687,6 +692,12 @@ public class ChatBotService {
         Long dealAmountMax,
         Long depositMax,
         Long monthlyRentMax
+    ) {
+    }
+
+    private record PriorityMention(
+        SurveyCategory category,
+        int index
     ) {
     }
 }

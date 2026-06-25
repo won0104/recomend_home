@@ -37,7 +37,8 @@ public class NeighborhoodExplanationFunction implements Function<NeighborhoodExp
         "SHOPPING", "장보기와 생활 편의",
         "PARK", "공원과 산책",
         "MEDICAL", "의료",
-        "PET", "반려동물"
+        "PET", "반려동물",
+        "TRANSPORT", "교통"
     );
 
     private final ChatStateService chatStateService;

@@ -34,8 +34,8 @@ public record ChatBotSlotDTO(
     @JsonPropertyDescription("주거 형태입니다. 아파트, 원룸, 오피스텔, 빌라 등 사용자가 말한 값을 넣습니다.")
     String housingType,
 
-    @Description("사용자의 생활 우선순위 3개입니다. SCHOOL, CAFE, CULTURE, SHOPPING, PARK, MEDICAL, PET 중 정확히 3개입니다.")
-    @JsonPropertyDescription("사용자의 생활 우선순위 3개입니다. SCHOOL, CAFE, CULTURE, SHOPPING, PARK, MEDICAL, PET 중 정확히 3개입니다.")
+    @Description("사용자의 생활 우선순위 3개입니다. SCHOOL, CAFE, CULTURE, SHOPPING, PARK, MEDICAL, PET, TRANSPORT 중 정확히 3개입니다.")
+    @JsonPropertyDescription("사용자의 생활 우선순위 3개입니다. SCHOOL, CAFE, CULTURE, SHOPPING, PARK, MEDICAL, PET, TRANSPORT 중 정확히 3개입니다.")
     List<SurveyCategory> priorities
 ) {
 }
