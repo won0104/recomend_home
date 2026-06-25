@@ -33,7 +33,7 @@ class ParkScoreCalculatorIntegrationTest {
 
         assertThat(scores).hasSize(3);
         assertThat(scores.get("4480025625")).isCloseTo(100.0, within(0.0001));
-        assertThat(scores.get("4139013200")).isCloseTo(100.0 - (100.0 / 3), within(0.0001));
-        assertThat(scores.get("2818510600")).isCloseTo(100.0 - (200.0 / 3), within(0.0001));
+        assertThat(scores.get("4139013200")).isCloseTo(100.0, within(0.0001));
+        assertThat(scores.get("2818510600")).isCloseTo(100.0, within(0.0001));
     }
 }

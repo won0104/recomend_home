@@ -14,7 +14,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.prj.model.dto.neighborhood.NeighborhoodParkCount;
 import com.ssafy.prj.model.mapper.neighborhood.ParkMapper;
-import com.ssafy.prj.model.service.neighborhood.score.RelativeScorePolicy;
 
 @ExtendWith(MockitoExtension.class)
 class ParkScoreCalculatorTest {
@@ -26,7 +25,7 @@ class ParkScoreCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        parkScoreCalculator = new ParkScoreCalculator(parkMapper, new RelativeScorePolicy());
+        parkScoreCalculator = new ParkScoreCalculator(parkMapper);
     }
 
     @Test
@@ -50,8 +49,8 @@ class ParkScoreCalculatorTest {
         Map<String, Double> result = parkScoreCalculator.calculateScores(dongCodes);
 
         assertThat(result).containsEntry("A", 100.0);
-        assertThat(result).containsEntry("B", 90.0);
-        assertThat(result).containsEntry("C", 80.0);
+        assertThat(result).containsEntry("B", 100.0);
+        assertThat(result).containsEntry("C", 75.0);
         assertThat(result).containsEntry("D", 0.0);
     }
 

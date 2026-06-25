@@ -7,7 +7,8 @@ public enum SurveyCategory {
     SHOPPING("장보기/생활편의", 3),
     PARK("공원/산책", 4),
     MEDICAL("의료", 5),
-    PET("반려동물", 6);
+    PET("반려동물", 6),
+    TRANSPORT("교통", 7);
 
     private final String label;
     private final int index;

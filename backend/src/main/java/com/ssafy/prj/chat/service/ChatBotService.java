@@ -633,6 +633,7 @@ public class ChatBotService {
         addPriorityIfMentioned(priorities, normalized, SurveyCategory.PARK, "공원", "산책", "park");
         addPriorityIfMentioned(priorities, normalized, SurveyCategory.MEDICAL, "의료", "병원", "medical");
         addPriorityIfMentioned(priorities, normalized, SurveyCategory.PET, "반려", "동물", "펫", "pet");
+        addPriorityIfMentioned(priorities, normalized, SurveyCategory.TRANSPORT, "교통", "버스", "지하철", "역세권", "transport");
         return priorities;
     }
 

@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import com.ssafy.prj.batch.commercial.CommercialMetricCategory;
 import com.ssafy.prj.model.mapper.neighborhood.CommercialMetricMapper;
 import com.ssafy.prj.model.service.neighborhood.SurveyCategory;
-import com.ssafy.prj.model.service.neighborhood.score.RelativeScorePolicy;
+import com.ssafy.prj.model.service.neighborhood.score.PercentileScorePolicy;
 
 /** 보건·의료(Q1) 통계를 설문의 {@link SurveyCategory#MEDICAL} 점수로 변환한다. */
 @Component
@@ -13,13 +13,14 @@ public class MedicalScoreCalculator extends AbstractCommercialScoreCalculator {
 
     public MedicalScoreCalculator(
         CommercialMetricMapper commercialMetricMapper,
-        RelativeScorePolicy relativeScorePolicy
+        PercentileScorePolicy percentileScorePolicy
     ) {
         super(
             commercialMetricMapper,
-            relativeScorePolicy,
+            percentileScorePolicy,
             SurveyCategory.MEDICAL,
-            CommercialMetricCategory.MEDICAL.getDatabaseCategory()
+            CommercialMetricCategory.MEDICAL.getDatabaseCategory(),
+            20.0
         );
     }
 }
